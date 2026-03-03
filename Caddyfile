@@ -1,0 +1,56 @@
+# Caddy Configuration for Trading Dashboard
+# Place this in your Caddyfile or include it in your existing config
+
+# Option 1: If you have a single domain and want to host trading dashboard at /trading
+example.com {
+    # Frontend - Serve at /trading
+    handle /trading* {
+        # Strip the /trading prefix before passing to frontend
+        uri strip_prefix /trading
+
+        reverse_proxy localhost:5174 {
+            header_uri -X-Forwarded-Path
+            header_down -X-Forwarded-Path
+        }
+    }
+
+    # API - Serve at /trading/api
+    handle /trading/api* {
+        # Strip the /trading/api prefix and add back /api
+        uri strip_prefix /trading/api
+        uri path_regexp ^/(.*)$ /api/$1
+
+        reverse_proxy localhost:8001 {
+            header_uri -X-Forwarded-Path
+            header_down -X-Forwarded-Path
+        }
+    }
+
+    # Your other routes can go here
+    # handle / { ... }
+}
+
+# Option 2: If you have multiple subdomains or separate domain
+# trading.example.com {
+#     reverse_proxy localhost:5174
+#
+#     handle /api* {
+#         reverse_proxy localhost:8001
+#     }
+# }
+
+# Option 3: If you're running multiple services and want everything at domain.com/trading
+# domain.com {
+#     handle /trading {
+#         reverse_proxy localhost:5174
+#     }
+#
+#     handle /trading/api {
+#         reverse_proxy localhost:8001
+#     }
+#
+#     # Other services...
+#     handle /other-service {
+#         reverse_proxy localhost:3000
+#     }
+# }
