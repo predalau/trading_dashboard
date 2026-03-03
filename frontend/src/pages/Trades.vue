@@ -1,14 +1,14 @@
 <template>
   <div class="space-y-8 animate-fade-in">
     <section class="space-y-4">
-      <h1 class="text-4xl font-bold">Trading</h1>
-      <p class="text-dark-300">Manage your paper trades and analyze performance</p>
+      <h1 class="text-4xl font-bold text-purple-400">🛡️ The Raid Hall</h1>
+      <p class="text-purple-400">Prepare your raids and study your glorious victories and honorable defeats</p>
     </section>
 
     <!-- New Trade Form -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="chart-container">
-        <h2 class="text-xl font-semibold mb-4">Open New Trade</h2>
+      <div class="chart-container border-purple-700">
+        <h2 class="text-xl font-semibold mb-4 text-purple-400">⚔️ Plan Your Raid</h2>
         <form @submit.prevent="submitTrade" class="space-y-4">
           <div>
             <label class="block text-sm text-dark-400 mb-2">Symbol</label>
@@ -54,15 +54,15 @@
             <textarea v-model="form.notes" placeholder="Add notes..." rows="3" class="w-full"></textarea>
           </div>
 
-          <button type="submit" class="btn btn-primary w-full">
-            Open Trade
+          <button type="submit" class="btn btn-primary w-full bg-purple-700 hover:bg-purple-600">
+            ⚔️ Launch Raid
           </button>
         </form>
       </div>
 
       <div class="lg:col-span-2">
-        <div class="chart-container">
-          <h2 class="text-xl font-semibold mb-4">Open Positions</h2>
+        <div class="chart-container border-purple-700">
+          <h2 class="text-xl font-semibold mb-4 text-purple-400">👑 Active Conquests</h2>
           <div class="space-y-3">
             <div
               v-for="trade in openTrades"
@@ -103,8 +103,8 @@
 
     <!-- Close Trade Modal -->
     <div v-if="tradeToClose" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div class="chart-container max-w-md w-full mx-4">
-        <h3 class="text-xl font-semibold mb-4">Close Trade</h3>
+      <div class="chart-container max-w-md w-full mx-4 border-purple-700">
+        <h3 class="text-xl font-semibold mb-4 text-purple-400">⚡ End Your Raid</h3>
         <div class="space-y-4">
           <div>
             <label class="block text-sm text-dark-400 mb-2">Exit Price</label>
@@ -123,8 +123,8 @@
     </div>
 
     <!-- Closed Trades History -->
-    <div class="chart-container">
-      <h2 class="text-xl font-semibold mb-4">Trade History</h2>
+    <div class="chart-container border-purple-700">
+      <h2 class="text-xl font-semibold mb-4 text-purple-400">📜 Chronicles of Battle</h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="border-b border-dark-700">

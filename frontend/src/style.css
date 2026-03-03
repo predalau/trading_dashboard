@@ -38,55 +38,80 @@ body {
   background: #64748b;
 }
 
-/* Glass effect background */
+/* Glass effect background - InvesThor style */
 .glass-effect {
-  background: rgba(15, 23, 42, 0.7);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.6));
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(100, 116, 139, 0.2);
+  border: 1px solid rgba(167, 139, 250, 0.3);
   border-radius: 12px;
 }
 
-/* Chart container */
+/* Chart container - InvesThor Viking Style */
 .chart-container {
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   border-radius: 12px;
-  border: 1px solid rgba(100, 116, 139, 0.1);
+  border: 2px solid rgba(167, 139, 250, 0.2);
   padding: 16px;
+  position: relative;
 }
 
-/* Card component */
+.chart-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.6), rgba(124, 58, 237, 0.5), rgba(167, 139, 250, 0.6));
+  border-radius: 12px 12px 0 0;
+}
+
+/* Card component - InvesThor Viking Style */
 .card {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(100, 116, 139, 0.1);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.8));
+  border: 2px solid rgba(167, 139, 250, 0.2);
   border-radius: 8px;
   padding: 16px;
   transition: all 0.3s ease;
+  position: relative;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.5), rgba(124, 58, 237, 0.3), rgba(167, 139, 250, 0.5));
+  border-radius: 8px 8px 0 0;
 }
 
 .card:hover {
-  background: rgba(30, 41, 59, 0.8);
-  border-color: rgba(100, 116, 139, 0.3);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(20, 30, 48, 0.9));
+  border-color: rgba(167, 139, 250, 0.5);
+  box-shadow: 0 0 20px rgba(167, 139, 250, 0.15);
 }
 
-/* Button styles */
+/* Button styles - InvesThor Viking Theme */
 .btn {
-  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 uppercase tracking-wide;
 }
 
 .btn-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700 active:scale-95;
+  @apply bg-gradient-to-r from-purple-700 to-purple-600 text-white hover:from-purple-600 hover:to-purple-500 active:scale-95 shadow-lg;
 }
 
 .btn-secondary {
-  @apply bg-dark-700 text-dark-100 hover:bg-dark-600;
+  @apply bg-dark-700 text-purple-300 hover:bg-dark-600 hover:text-purple-200 border border-purple-600;
 }
 
 .btn-success {
-  @apply bg-accent-green text-white hover:bg-opacity-90;
+  @apply bg-gradient-to-r from-green-700 to-green-600 text-white hover:from-green-600 hover:to-green-500;
 }
 
 .btn-danger {
-  @apply bg-accent-red text-white hover:bg-opacity-90;
+  @apply bg-gradient-to-r from-red-700 to-red-600 text-white hover:from-red-600 hover:to-red-500;
 }
 
 /* Input styles */

@@ -1,107 +1,329 @@
 <template>
-  <div class="w-full">
-    <div ref="chartContainer" class="w-full" style="height: 400px;"></div>
+  <div class="w-full h-96 relative">
+    <!-- Chart Container (always in DOM) -->
+    <div
+      ref="chartContainer"
+      class="w-full h-full rounded-lg"
+      style="background: transparent;"
+    ></div>
+
+    <!-- Loading/Error Overlay -->
+    <div
+      v-if="!chartReady"
+      class="absolute inset-0 w-full h-full flex items-center justify-center bg-dark-800 bg-opacity-80 rounded-lg"
+    >
+      <div class="text-center">
+        <div class="inline-block animate-pulse mb-2">⚡</div>
+        <p class="text-dark-400">{{ error || 'Loading battle chart...' }}</p>
+        <button v-if="error" @click="initChart" class="btn btn-primary text-sm mt-4">Retry</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { createChart } from 'lightweight-charts'
+import binanceWS from '@/services/websocket'
 
 const props = defineProps({
-  symbol: {
-    type: String,
-    required: true
-  }
+  symbol: { type: String, required: true },
+  interval: { type: String, default: '1h' }
 })
 
 const chartContainer = ref(null)
+const chartReady = ref(false)
+const error = ref(null)
+
 let chart = null
 let candleSeries = null
+let wsUnsubscribe = null
+let historicalData = []
+let resizeObserver = null
 
-const sampleData = [
-  { time: '2024-01-01', open: 42500, high: 43200, low: 42100, close: 43000 },
-  { time: '2024-01-02', open: 43000, high: 44000, low: 42800, close: 43800 },
-  { time: '2024-01-03', open: 43800, high: 44500, low: 43500, close: 44200 },
-  { time: '2024-01-04', open: 44200, high: 44800, low: 43900, close: 44500 },
-  { time: '2024-01-05', open: 44500, high: 45200, low: 44200, close: 44900 },
-  { time: '2024-01-06', open: 44900, high: 45500, low: 44600, close: 45200 },
-  { time: '2024-01-07', open: 45200, high: 45800, low: 45000, close: 45500 },
-  { time: '2024-01-08', open: 45500, high: 45900, low: 45100, close: 45600 },
-  { time: '2024-01-09', open: 45600, high: 46200, low: 45400, close: 45900 },
-  { time: '2024-01-10', open: 45900, high: 46500, low: 45700, close: 46200 },
-]
+/**
+ * Create and size the chart
+ */
+const createChartInstance = () => {
+  if (!chartContainer.value) {
+    console.error('Chart container not found')
+    return false
+  }
 
-const initChart = () => {
-  if (!chartContainer.value) return
+  try {
+    const container = chartContainer.value
+    const width = container.clientWidth
+    const height = container.clientHeight
 
-  // Create chart
-  chart = createChart(chartContainer.value, {
-    layout: {
-      textColor: '#94a3b8',
-      background: {
-        color: 'transparent',
+    chart = createChart(container, {
+      width,
+      height,
+      layout: {
+        textColor: '#94a3b8',
+        background: { color: 'transparent' },
       },
-    },
-    grid: {
-      vertLines: {
-        color: '#1e293b',
+      grid: {
+        vertLines: { color: '#1e293b' },
+        horzLines: { color: '#1e293b' },
       },
-      horzLines: {
-        color: '#1e293b',
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
       },
-    },
-    timeScale: {
-      timeVisible: true,
-      secondsVisible: false,
-    },
-    width: chartContainer.value.clientWidth,
-    height: 400,
-  })
+    })
 
-  // Create candle series
-  candleSeries = chart.addCandlestickSeries({
-    upColor: '#10b981',
-    downColor: '#ef4444',
-    borderUpColor: '#10b981',
-    borderDownColor: '#ef4444',
-    wickUpColor: '#10b981',
-    wickDownColor: '#ef4444',
-  })
+    candleSeries = chart.addCandlestickSeries({
+      upColor: '#10b981',
+      downColor: '#ef4444',
+      borderUpColor: '#10b981',
+      borderDownColor: '#ef4444',
+      wickUpColor: '#10b981',
+      wickDownColor: '#ef4444',
+    })
 
-  // Set data
-  candleSeries.setData(sampleData)
+    // Handle container resize
+    resizeObserver = new ResizeObserver(() => {
+      if (chartContainer.value && chart) {
+        const newWidth = chartContainer.value.clientWidth
+        const newHeight = chartContainer.value.clientHeight
+        if (newWidth > 0 && newHeight > 0) {
+          chart.applyOptions({ width: newWidth, height: newHeight })
+        }
+      }
+    })
+    resizeObserver.observe(container)
 
-  // Fit content
-  chart.timeScale().fitContent()
+    return true
+  } catch (err) {
+    console.error('Chart creation error:', err)
+    error.value = 'Failed to create chart'
+    return false
+  }
+}
 
-  // Handle window resize
-  const handleResize = () => {
-    if (chartContainer.value) {
-      chart.applyOptions({
-        width: chartContainer.value.clientWidth,
-      })
+/**
+ * Load initial historical data and setup real-time updates
+ */
+const loadChartData = async () => {
+  if (!chart || !candleSeries) {
+    error.value = 'Chart not initialized'
+    return
+  }
+
+  try {
+    // Fetch initial candles via REST
+    const response = await fetch(
+      `/trading/api/v1/market/klines/${props.symbol}?interval=${props.interval}&limit=100`
+    )
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const data = await response.json()
+    historicalData = data.klines.map(kline => ({
+      time: kline.time,
+      open: kline.open,
+      high: kline.high,
+      low: kline.low,
+      close: kline.close
+    }))
+
+    // Validate data
+    const isValid = historicalData.every(c =>
+      typeof c.time === 'number' && typeof c.open === 'number' &&
+      typeof c.high === 'number' && typeof c.low === 'number' && typeof c.close === 'number'
+    )
+
+    if (!isValid) throw new Error('Invalid candle data format')
+
+    // Load data into chart
+    candleSeries.setData(historicalData)
+
+    // Fit to visible range
+    try {
+      chart.timeScale().fitContent()
+    } catch (fitErr) {
+      if (historicalData.length > 0) {
+        const range = {
+          from: historicalData[0].time,
+          to: historicalData[historicalData.length - 1].time
+        }
+        chart.timeScale().setVisibleRange(range)
+      }
+    }
+
+    // Subscribe to WebSocket for real-time trade updates and build candles
+    wsUnsubscribe = binanceWS.subscribe(
+      props.symbol,
+      'aggTrade',
+      null,
+      handleTradeUpdate
+    )
+
+    chartReady.value = true
+    error.value = null
+  } catch (err) {
+    console.error('Chart data error:', err)
+    error.value = err.message || 'Failed to load chart data'
+  }
+}
+
+/**
+ * Convert interval string to milliseconds
+ */
+const getIntervalMs = (interval) => {
+  const unit = interval.slice(-1)
+  const value = parseInt(interval.slice(0, -1))
+
+  const unitMs = {
+    'm': 60 * 1000,
+    'h': 60 * 60 * 1000,
+    'd': 24 * 60 * 60 * 1000,
+    'w': 7 * 24 * 60 * 60 * 1000
+  }
+
+  return value * (unitMs[unit] || 1)
+}
+
+/**
+ * Build candles from individual trades
+ */
+const handleTradeUpdate = (trade) => {
+  if (!candleSeries) return
+
+  try {
+    const tradeTime = Math.floor(trade.time / 1000) // Convert ms to seconds
+    const intervalMs = getIntervalMs(props.interval)
+    const intervalSec = intervalMs / 1000
+
+    // Calculate candle time based on interval
+    const candleTime = Math.floor(tradeTime / intervalSec) * intervalSec
+    const price = parseFloat(trade.price)
+
+    const lastCandle = historicalData[historicalData.length - 1]
+
+    if (!lastCandle || candleTime > lastCandle.time) {
+      // New candle
+      const newCandle = {
+        time: candleTime,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        volume: parseFloat(trade.qty)
+      }
+      candleSeries.update(newCandle)
+      historicalData.push(newCandle)
+    } else if (candleTime === lastCandle.time) {
+      // Update existing candle
+      lastCandle.high = Math.max(lastCandle.high, price)
+      lastCandle.low = Math.min(lastCandle.low, price)
+      lastCandle.close = price
+      lastCandle.volume += parseFloat(trade.qty)
+      candleSeries.update(lastCandle)
+    }
+  } catch (err) {
+    console.error('Trade update error:', err)
+  }
+}
+
+/**
+ * Handle incoming candle updates from WebSocket (legacy - for klines)
+ */
+const updateCandle = (candleData, symbol) => {
+  if (!candleSeries) {
+    console.warn('candleSeries not ready for update')
+    return
+  }
+
+  try {
+    const lastCandle = historicalData[historicalData.length - 1]
+
+    console.log(`[${symbol}] Candle WS update: time=${candleData.time}, close=${candleData.close}`)
+    console.log(`Last candle: time=${lastCandle?.time}, close=${lastCandle?.close}`)
+
+    if (lastCandle && candleData.time === lastCandle.time) {
+      // Update existing candle
+      console.log(`Updating existing candle`)
+      candleSeries.update(candleData)
+      historicalData[historicalData.length - 1] = candleData
+    } else if (!lastCandle || candleData.time > lastCandle.time) {
+      // New candle
+      console.log(`Adding new candle`)
+      candleSeries.update(candleData)
+      historicalData.push(candleData)
+    } else {
+      console.warn(`Ignoring old candle: ${candleData.time} <= ${lastCandle.time}`)
+    }
+  } catch (err) {
+    console.error('Candle update error:', err)
+  }
+}
+
+/**
+ * Initialize chart and connect to data
+ */
+const initChart = async () => {
+  chartReady.value = false
+  error.value = null
+
+  // Ensure WebSocket is connected
+  if (!binanceWS.getStatus().connected) {
+    try {
+      await binanceWS.connect()
+    } catch (err) {
+      console.error('WebSocket connection failed:', err)
+      error.value = 'Cannot connect to real-time data'
+      return
     }
   }
 
-  window.addEventListener('resize', handleResize)
+  // Wait for DOM to be ready
+  await nextTick()
+
+  // Create chart with proper sizing
+  if (!createChartInstance()) {
+    return
+  }
+
+  // Load historical data and start real-time updates
+  await loadChartData()
 }
 
-onMounted(() => {
+/**
+ * Cleanup on unmount
+ */
+const cleanup = () => {
+  if (wsUnsubscribe) wsUnsubscribe()
+  if (resizeObserver) resizeObserver.disconnect()
+  if (chart) chart.remove()
+}
+
+onMounted(initChart)
+onUnmounted(cleanup)
+
+// Re-initialize when symbol or interval changes
+watch(() => props.symbol, () => {
+  cleanup()
   initChart()
 })
 
-watch(
-  () => props.symbol,
-  () => {
-    // Reload chart data for new symbol
-    if (candleSeries) {
-      candleSeries.setData(sampleData)
-      chart.timeScale().fitContent()
-    }
-  }
-)
+watch(() => props.interval, () => {
+  cleanup()
+  initChart()
+})
 </script>
 
 <style scoped>
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 </style>

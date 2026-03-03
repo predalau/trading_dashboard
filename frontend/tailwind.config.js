@@ -22,7 +22,8 @@ export default {
         accent: {
           green: '#10b981',
           red: '#ef4444',
-          blue: '#3b82f6',
+          purple: '#a78bfa',
+          cyan: '#06b6d4',
         }
       },
       animation: {
