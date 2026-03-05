@@ -24,10 +24,12 @@ wheels/
 *.egg
 .pytest_cache/
 
-# FastAPI
+# FastAPI & Environment
 .env
 .env.local
 .env.*.local
+.env.docker           # Docker credentials - NEVER COMMIT!
+.env.production       # Production credentials - NEVER COMMIT!
 
 # Node/Vue
 node_modules/

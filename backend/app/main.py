@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 # Import routers
-from app.api import paper_trading, market_data, user
+from app.api import paper_trading, market_data, user, trades
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ app.add_middleware(
 app.include_router(paper_trading.router, prefix="/api/v1/paper-trading", tags=["Paper Trading"])
 app.include_router(market_data.router, prefix="/api/v1/market", tags=["Market Data"])
 app.include_router(user.router, prefix="/api/v1/user", tags=["User"])
+app.include_router(trades.router, prefix="/api/v1", tags=["Trades"])
 
 
 @app.get("/health")

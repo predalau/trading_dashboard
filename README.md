@@ -1,19 +1,21 @@
-# Trading Dashboard
+# ⚔️ InvesThor - Viking Trading Warrior
 
-A comprehensive full-stack financial trading dashboard with paper trading capabilities, real-time market data integration, and both web UI and programmatic API access.
+### *Conquer the markets with the spirit of a Viking warrior!* 🛡️⚡
 
-## Features
+A comprehensive full-stack financial trading dashboard with paper trading capabilities, real-time market data integration, and both web UI and programmatic API access. Built with the fury of the North!
 
-- **Paper Trading**: Execute risk-free trades with virtual funds
-- **Multi-Exchange Support**:
+## ⚔️ Viking Features
+
+- **⚡ Paper Trading Raiders**: Execute risk-free trades with virtual funds - a true warrior's playground
+- **🛡️ Multi-Exchange Alliances**:
   - Binance (Live)
   - Solana (Coming Soon)
   - More exchanges planned
-- **Real-Time Charts**: Professional financial charts with TradingView Lightweight Charts
-- **Portfolio Analytics**: Track performance, P&L, win rates, and trading statistics
-- **REST API**: Programmatic trading access for algorithmic strategies
-- **Modern UI**: Clean, dark-themed dashboard built with Vue 3 and Tailwind CSS
-- **PostgreSQL Database**: Persistent storage for trades, accounts, and market data
+- **⚔️ Battle Charts**: Professional financial charts with TradingView Lightweight Charts - see your victories in real-time
+- **👑 Empire Analytics**: Track performance, P&L, win rates, and trading statistics like a true Jarl
+- **🌩️ Sorcery API**: Programmatic trading access for algorithmic strategies - harness divine power
+- **🏰 Fortress UI**: Dark-themed, Viking-inspired dashboard built with Vue 3 and Tailwind CSS
+- **💾 Eternal Scrolls**: PostgreSQL database storing your glorious conquests and trades
 
 ## Tech Stack
 

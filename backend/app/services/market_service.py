@@ -120,7 +120,7 @@ class MarketService:
                     "high": float(data["highPrice"]),
                     "low": float(data["lowPrice"]),
                     "volume": float(data["volume"]),
-                    "quote_asset_volume": float(data["quoteAssetVolume"]),
+                    "quote_volume": float(data.get("quoteVolume", data.get("quoteAssetVolume", 0))),
                     "open_time": data["openTime"],
                     "close_time": data["closeTime"]
                 }
