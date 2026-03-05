@@ -62,7 +62,7 @@ body {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, rgba(167, 139, 250, 0.6), rgba(124, 58, 237, 0.5), rgba(167, 139, 250, 0.6));
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.6), rgba(234, 179, 8, 0.4), rgba(167, 139, 250, 0.6));
   border-radius: 12px 12px 0 0;
 }
 
@@ -83,14 +83,14 @@ body {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, rgba(167, 139, 250, 0.5), rgba(124, 58, 237, 0.3), rgba(167, 139, 250, 0.5));
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.5), rgba(234, 179, 8, 0.35), rgba(167, 139, 250, 0.5));
   border-radius: 8px 8px 0 0;
 }
 
 .card:hover {
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(20, 30, 48, 0.9));
   border-color: rgba(167, 139, 250, 0.5);
-  box-shadow: 0 0 20px rgba(167, 139, 250, 0.15);
+  box-shadow: 0 0 20px rgba(167, 139, 250, 0.1), 0 0 30px rgba(234, 179, 8, 0.08);
 }
 
 /* Button styles - InvesThor Viking Theme */

@@ -51,6 +51,8 @@ class Trade(Base):
     exchange = Column(String(50), nullable=False)  # e.g., BINANCE, SOLANA
     trade_type = Column(SQLEnum(TradeType), nullable=False)
     entry_price = Column(Float, nullable=False)
+    stop_loss = Column(Float, nullable=True)
+    take_profit = Column(Float, nullable=True)
     quantity = Column(Float, nullable=False)
     entry_time = Column(DateTime(timezone=True), server_default=func.now())
     exit_price = Column(Float, nullable=True)
@@ -58,6 +60,7 @@ class Trade(Base):
     profit_loss = Column(Float, nullable=True)
     profit_loss_percentage = Column(Float, nullable=True)
     is_open = Column(Boolean, default=True)
+    planned_rr_ratio = Column(Float, nullable=True)
     notes = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

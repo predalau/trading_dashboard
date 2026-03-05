@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-8 animate-fade-in">
     <section class="space-y-4 text-center py-8">
-      <h1 class="text-5xl font-bold bg-gradient-to-r from-purple-400 via-purple-300 to-violet-400 bg-clip-text text-transparent">
+      <h1 class="text-5xl font-bold bg-gradient-to-r from-purple-400 via-secondary-400 to-purple-400 bg-clip-text text-transparent">
         ⚔️ InvesThor ⚡
       </h1>
       <p class="text-purple-400 text-lg font-semibold">Conquer the Markets with Warrior Strategy</p>

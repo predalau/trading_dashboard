@@ -4,7 +4,7 @@
     <div
       ref="chartContainer"
       class="w-full h-full rounded-lg"
-      style="background: transparent;"
+      :style="{ background: 'transparent', cursor: clickMode ? 'crosshair' : 'default' }"
     ></div>
 
     <!-- Loading/Error Overlay -->
@@ -28,8 +28,12 @@ import binanceWS from '@/services/websocket'
 
 const props = defineProps({
   symbol: { type: String, required: true },
-  interval: { type: String, default: '1h' }
+  interval: { type: String, default: '1h' },
+  trades: { type: Array, default: () => [] },
+  clickMode: { type: String, default: null } // 'entry', 'sl', 'tp', or null
 })
+
+const emit = defineEmits(['chart-click'])
 
 const chartContainer = ref(null)
 const chartReady = ref(false)
@@ -40,6 +44,7 @@ let candleSeries = null
 let wsUnsubscribe = null
 let historicalData = []
 let resizeObserver = null
+let priceLines = [] // Track active price lines for cleanup
 
 /**
  * Create and size the chart
@@ -161,6 +166,10 @@ const loadChartData = async () => {
 
     chartReady.value = true
     error.value = null
+
+    // Render trade positions and setup click handler
+    renderTradeLines()
+    setupClickHandler()
   } catch (err) {
     console.error('Chart data error:', err)
     error.value = err.message || 'Failed to load chart data'
@@ -227,36 +236,74 @@ const handleTradeUpdate = (trade) => {
 }
 
 /**
- * Handle incoming candle updates from WebSocket (legacy - for klines)
+ * Render trade positions as price lines on the chart
  */
-const updateCandle = (candleData, symbol) => {
-  if (!candleSeries) {
-    console.warn('candleSeries not ready for update')
-    return
-  }
+const renderTradeLines = () => {
+  if (!candleSeries) return
 
-  try {
-    const lastCandle = historicalData[historicalData.length - 1]
+  // Remove existing price lines
+  priceLines.forEach(line => {
+    try { candleSeries.removePriceLine(line) } catch {}
+  })
+  priceLines = []
 
-    console.log(`[${symbol}] Candle WS update: time=${candleData.time}, close=${candleData.close}`)
-    console.log(`Last candle: time=${lastCandle?.time}, close=${lastCandle?.close}`)
+  // Draw lines for each trade
+  for (const trade of props.trades) {
+    if (!trade.is_open) continue
 
-    if (lastCandle && candleData.time === lastCandle.time) {
-      // Update existing candle
-      console.log(`Updating existing candle`)
-      candleSeries.update(candleData)
-      historicalData[historicalData.length - 1] = candleData
-    } else if (!lastCandle || candleData.time > lastCandle.time) {
-      // New candle
-      console.log(`Adding new candle`)
-      candleSeries.update(candleData)
-      historicalData.push(candleData)
-    } else {
-      console.warn(`Ignoring old candle: ${candleData.time} <= ${lastCandle.time}`)
+    // Entry line
+    const entryLine = candleSeries.createPriceLine({
+      price: trade.entry_price,
+      color: '#facc15',
+      lineWidth: 2,
+      lineStyle: 2, // Dashed
+      axisLabelVisible: true,
+      title: `Entry ${trade.trade_type === 'BUY' ? '▲' : '▼'} $${trade.entry_price.toFixed(2)}`,
+    })
+    priceLines.push(entryLine)
+
+    // Stop loss line
+    if (trade.stop_loss) {
+      const slLine = candleSeries.createPriceLine({
+        price: trade.stop_loss,
+        color: '#ef4444',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: `SL $${trade.stop_loss.toFixed(2)}`,
+      })
+      priceLines.push(slLine)
     }
-  } catch (err) {
-    console.error('Candle update error:', err)
+
+    // Take profit line
+    if (trade.take_profit) {
+      const tpLine = candleSeries.createPriceLine({
+        price: trade.take_profit,
+        color: '#10b981',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: `TP $${trade.take_profit.toFixed(2)}`,
+      })
+      priceLines.push(tpLine)
+    }
   }
+}
+
+/**
+ * Handle chart click for click-to-set mode
+ */
+const setupClickHandler = () => {
+  if (!chart || !candleSeries) return
+
+  chart.subscribeClick((param) => {
+    if (!props.clickMode || !param.point) return
+
+    const price = candleSeries.coordinateToPrice(param.point.y)
+    if (price && price > 0) {
+      emit('chart-click', { mode: props.clickMode, price: parseFloat(price.toFixed(2)) })
+    }
+  })
 }
 
 /**
@@ -311,6 +358,11 @@ watch(() => props.interval, () => {
   cleanup()
   initChart()
 })
+
+// Re-render trade lines when trades change
+watch(() => props.trades, () => {
+  renderTradeLines()
+}, { deep: true })
 </script>
 
 <style scoped>

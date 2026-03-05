@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS trades (
     exchange VARCHAR(50) NOT NULL,
     trade_type VARCHAR(10) NOT NULL CHECK (trade_type IN ('BUY', 'SELL')),
     entry_price DECIMAL(20, 8) NOT NULL,
+    stop_loss DECIMAL(20, 8),
+    take_profit DECIMAL(20, 8),
     quantity DECIMAL(20, 8) NOT NULL,
     entry_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     exit_price DECIMAL(20, 8),
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS trades (
     profit_loss DECIMAL(20, 8),
     profit_loss_percentage DECIMAL(10, 4),
     is_open BOOLEAN DEFAULT true,
+    planned_rr_ratio DECIMAL(10, 2),
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
