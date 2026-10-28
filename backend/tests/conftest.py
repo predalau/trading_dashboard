@@ -7,9 +7,6 @@ from fastapi.testclient import TestClient
 from app.database import Base, get_db
 from app.main import app
 
-# Import models so their tables register on Base.metadata before create_all.
-import app.models  # noqa: F401
-
 
 @pytest.fixture()
 def db_session():

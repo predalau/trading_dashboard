@@ -84,11 +84,9 @@ async def get_trades(
 
 @router.post("/trades/")
 async def create_trade(trade: TradeCreate, db: Session = Depends(get_db)):
-    # Get first available account
-    from app.models import PaperTradingAccount
-    account = db.query(PaperTradingAccount).first()
-    if not account:
-        raise HTTPException(status_code=400, detail="No trading account found")
+    # Use (or lazily create) the default paper account.
+    from app.services.account_service import get_or_create_default_account
+    account = get_or_create_default_account(db)
 
     new_trade = Trade(
         account_id=account.id,
