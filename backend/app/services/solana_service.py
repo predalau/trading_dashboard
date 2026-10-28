@@ -48,3 +48,23 @@ class SolanaService:
         sol = await self.get_sol_balance(address)
         tokens = await self.get_token_balances(address)
         return {"address": address, "sol": sol, "tokens": tokens}
+
+    async def send_transaction(self, signed_b64: str) -> str:
+        """Broadcast a client-signed, base64-serialized transaction. Returns the signature."""
+        data = await self._rpc("sendTransaction", [
+            signed_b64, {"encoding": "base64", "skipPreflight": False, "maxRetries": 3},
+        ])
+        if data.get("error"):
+            raise RuntimeError(data["error"].get("message", "sendTransaction failed"))
+        return data["result"]
+
+    async def get_signature_status(self, signature: str) -> Optional[str]:
+        """Return 'processed'|'confirmed'|'finalized'|'failed', or None if unknown yet."""
+        data = await self._rpc("getSignatureStatuses", [[signature], {"searchTransactionHistory": True}])
+        values = (data.get("result") or {}).get("value") or [None]
+        val = values[0]
+        if not val:
+            return None
+        if val.get("err"):
+            return "failed"
+        return val.get("confirmationStatus")
