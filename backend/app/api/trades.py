@@ -10,6 +10,19 @@ from app.models import Trade, TradeType
 router = APIRouter()
 
 
+def realized_pl(trade_type, entry: float, exit_price: float, quantity: float):
+    """Return (pl, pl_pct) for a closed trade.
+
+    LONG (BUY) profits when price rises; SHORT (SELL) profits when price falls.
+    """
+    tt = trade_type.value if hasattr(trade_type, "value") else str(trade_type)
+    direction = 1 if tt.upper() == "BUY" else -1
+    pl = direction * (exit_price - entry) * quantity
+    pct = (pl / (entry * quantity) * 100) if entry and quantity else 0.0
+    return pl, pct
+
+
+
 class TradeCreate(BaseModel):
     symbol: str
     trade_type: str  # BUY or SELL
@@ -158,12 +171,9 @@ async def close_trade(trade_id: int, body: Optional[TradeClose] = None, db: Sess
 
     if body and body.exit_price is not None:
         trade.exit_price = body.exit_price
-        if trade.trade_type in ('BUY', TradeType.BUY):
-            trade.profit_loss = (body.exit_price - trade.entry_price) * trade.quantity
-        else:
-            trade.profit_loss = (trade.entry_price - body.exit_price) * trade.quantity
-        if trade.entry_price != 0:
-            trade.profit_loss_percentage = (trade.profit_loss / (trade.entry_price * trade.quantity)) * 100
+        trade.profit_loss, trade.profit_loss_percentage = realized_pl(
+            trade.trade_type, trade.entry_price, body.exit_price, trade.quantity
+        )
 
     db.commit()
 
