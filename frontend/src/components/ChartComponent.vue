@@ -3,19 +3,20 @@
     <!-- Chart Container (always in DOM) -->
     <div
       ref="chartContainer"
-      class="w-full h-full rounded-lg"
+      class="w-full h-full"
       :style="{ background: 'transparent', cursor: clickMode ? 'crosshair' : 'default' }"
     ></div>
 
     <!-- Loading/Error Overlay -->
     <div
       v-if="!chartReady"
-      class="absolute inset-0 w-full h-full flex items-center justify-center bg-dark-800 bg-opacity-80 rounded-lg"
+      class="absolute inset-0 w-full h-full flex items-center justify-center bg-term-panel"
     >
       <div class="text-center">
-        <div class="inline-block animate-pulse mb-2">⚡</div>
-        <p class="text-dark-400">{{ error || 'Loading battle chart...' }}</p>
-        <button v-if="error" @click="initChart" class="btn btn-primary text-sm mt-4">Retry</button>
+        <p :class="error ? 'text-down' : 'text-muted'">
+          {{ error ? '[ERR] ' + error : '[..] loading ' + symbol.toLowerCase() + '@kline_' + interval }}<span v-if="!error" class="cursor-text" aria-hidden="true"> _</span>
+        </p>
+        <button v-if="error" @click="initChart" class="t-btn-ghost mt-4">$ retry</button>
       </div>
     </div>
   </div>
@@ -49,6 +50,9 @@ let priceLines = [] // Track active price lines for cleanup
 /**
  * Create and size the chart
  */
+/** Read a design token from :root so the chart follows the CSS theme */
+const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+
 const createChartInstance = () => {
   if (!chartContainer.value) {
     console.error('Chart container not found')
@@ -64,26 +68,36 @@ const createChartInstance = () => {
       width,
       height,
       layout: {
-        textColor: '#94a3b8',
+        textColor: token('--muted'),
         background: { color: 'transparent' },
+        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: '#1e293b' },
-        horzLines: { color: '#1e293b' },
+        vertLines: { color: token('--grid') },
+        horzLines: { color: token('--grid') },
+      },
+      crosshair: {
+        vertLine: { color: token('--muted'), style: 2, labelBackgroundColor: token('--surface') },
+        horzLine: { color: token('--muted'), style: 2, labelBackgroundColor: token('--surface') },
+      },
+      rightPriceScale: {
+        borderColor: token('--line'),
       },
       timeScale: {
+        borderColor: token('--line'),
         timeVisible: true,
         secondsVisible: false,
       },
     })
 
     candleSeries = chart.addCandlestickSeries({
-      upColor: '#10b981',
-      downColor: '#ef4444',
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
+      upColor: token('--up'),
+      downColor: 'transparent', // hollow down candles
+      borderUpColor: token('--up'),
+      borderDownColor: token('--down'),
+      wickUpColor: token('--up'),
+      wickDownColor: token('--down'),
     })
 
     // Handle container resize
@@ -254,9 +268,9 @@ const renderTradeLines = () => {
     // Entry line
     const entryLine = candleSeries.createPriceLine({
       price: trade.entry_price,
-      color: '#facc15',
-      lineWidth: 2,
-      lineStyle: 2, // Dashed
+      color: token('--text'),
+      lineWidth: 1,
+      lineStyle: 1, // Dotted
       axisLabelVisible: true,
       title: `Entry ${trade.trade_type === 'BUY' ? '▲' : '▼'} $${trade.entry_price.toFixed(2)}`,
     })
@@ -266,7 +280,7 @@ const renderTradeLines = () => {
     if (trade.stop_loss) {
       const slLine = candleSeries.createPriceLine({
         price: trade.stop_loss,
-        color: '#ef4444',
+        color: token('--down'),
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
@@ -279,7 +293,7 @@ const renderTradeLines = () => {
     if (trade.take_profit) {
       const tpLine = candleSeries.createPriceLine({
         price: trade.take_profit,
-        color: '#10b981',
+        color: token('--tp'),
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,

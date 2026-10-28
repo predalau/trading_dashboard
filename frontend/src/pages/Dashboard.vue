@@ -1,208 +1,242 @@
 <template>
-  <div class="space-y-8 animate-fade-in">
+  <div class="flex flex-col gap-5">
     <!-- Charts Section -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 chart-container border-purple-700">
-        <div class="flex justify-between items-center mb-4">
+    <div class="flex flex-wrap gap-5">
+      <TermPanel flush class="chart-panel">
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2.5 px-3.5 py-2.5 border-b border-term-line">
           <!-- Ticker Dropdown -->
-          <div class="relative">
+          <div class="relative flex items-center">
+            <span class="text-muted" aria-hidden="true">╔═[</span>
             <button
               @click="dropdownOpen = !dropdownOpen"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-800 border border-purple-700 hover:border-purple-500 transition text-purple-300 font-semibold text-lg"
-            >
-              <span>{{ selectedLabel }}</span>
-              <svg class="w-4 h-4 transition-transform" :class="{ 'rotate-180': dropdownOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+              class="px-1 py-1.5 font-bold text-[15px] text-term-text hover:text-accent"
+              :aria-expanded="dropdownOpen"
+              aria-haspopup="listbox"
+            >{{ selectedLabel }} {{ dropdownOpen ? '▴' : '▾' }}</button>
+            <span class="text-muted" aria-hidden="true">]═</span>
 
             <!-- Dropdown Menu -->
             <div
               v-if="dropdownOpen"
-              class="absolute top-full left-0 mt-1 w-56 bg-dark-800 border border-purple-700 rounded-lg shadow-xl z-50 overflow-hidden"
+              class="absolute top-full left-0 mt-1 w-60 bg-term-surface border border-term-line z-50"
             >
-              <div class="max-h-64 overflow-y-auto">
-                <button
+              <div class="max-h-64 overflow-y-auto" role="listbox">
+                <div
                   v-for="pair in allPairs"
                   :key="pair.symbol"
-                  @click="selectPair(pair.symbol)"
-                  class="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-purple-900 hover:bg-opacity-30 transition"
-                  :class="pair.symbol === selectedSymbol ? 'text-purple-300 bg-purple-900 bg-opacity-20' : 'text-dark-300'"
+                  class="flex items-center"
+                  :class="pair.symbol === selectedSymbol ? 'bg-term-accent text-term-on-accent font-bold' : 'text-muted hover:text-term-text'"
                 >
-                  <span>{{ pair.label }}</span>
+                  <button
+                    @click="selectPair(pair.symbol)"
+                    class="flex-1 px-3.5 py-2.5 text-left"
+                    role="option"
+                    :aria-selected="pair.symbol === selectedSymbol"
+                  >{{ pair.symbol === selectedSymbol ? '> ' : '  ' }}{{ pair.label }}</button>
                   <button
                     v-if="isCustomPair(pair.symbol)"
                     @click.stop="removeCustomPair(pair.symbol)"
-                    class="text-dark-500 hover:text-red-400 transition text-xs ml-2"
-                    title="Remove pair"
-                  >
-                    ✕
-                  </button>
-                </button>
+                    class="px-3 py-2.5 text-xs hover:text-down"
+                    :aria-label="'Remove ' + pair.label"
+                  >rm</button>
+                </div>
               </div>
 
               <!-- Add Custom Pair -->
-              <div class="border-t border-dark-700 p-2">
+              <div class="border-t border-term-line p-2">
                 <div v-if="showAddPair" class="flex gap-1">
+                  <label class="sr-only" for="new-pair">New pair symbol</label>
                   <input
+                    id="new-pair"
                     v-model="newPairInput"
                     @keyup.enter="addCustomPair"
                     placeholder="e.g. DOGE"
-                    class="flex-1 px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white placeholder-dark-500 focus:border-secondary-500 focus:outline-none"
+                    class="t-input flex-1"
                     autofocus
                   />
-                  <button @click="addCustomPair" class="btn btn-primary text-xs px-2 py-1.5">Add</button>
+                  <button @click="addCustomPair" class="t-btn px-2.5 py-1.5">add</button>
                 </div>
                 <button
                   v-else
                   @click="showAddPair = true"
-                  class="w-full text-left px-2 py-1.5 text-sm text-purple-400 hover:text-purple-300 transition"
-                >
-                  + Add pair
-                </button>
+                  class="w-full text-left px-2 py-1.5 text-accent hover:text-term-text"
+                >+ add pair</button>
               </div>
             </div>
           </div>
 
+          <template v-if="symbolTicker">
+            <span class="text-[22px] font-extrabold glow" :class="symbolTicker.change >= 0 ? 'text-up' : 'text-down'">
+              {{ formatPrice(symbolTicker.price) }}
+            </span>
+            <span :class="symbolTicker.change >= 0 ? 'text-up' : 'text-down'">
+              {{ symbolTicker.change >= 0 ? '+' : '' }}{{ formatPrice(symbolTicker.priceChange) }}
+              ({{ symbolTicker.change >= 0 ? '+' : '' }}{{ symbolTicker.change.toFixed(2) }}%)
+            </span>
+          </template>
+
           <!-- Timeframe Buttons -->
-          <div class="flex gap-2">
+          <div class="flex gap-0.5 ml-auto" role="group" aria-label="Timeframe">
             <button
               v-for="tf in timeframes"
               :key="tf.value"
               @click="selectedTimeframe = tf.value"
-              :class="[
-                'btn text-sm',
-                selectedTimeframe === tf.value ? 'btn-primary' : 'btn-secondary'
-              ]"
-            >
-              {{ tf.label }}
-            </button>
+              class="px-2.5 py-2 border"
+              :class="selectedTimeframe === tf.value ? 'border-term-accent text-accent' : 'border-transparent text-muted hover:text-term-text'"
+              :aria-pressed="selectedTimeframe === tf.value"
+            >{{ tf.label }}</button>
           </div>
         </div>
-        <ChartComponent
-          :symbol="selectedSymbol"
-          :interval="selectedTimeframe"
-          :trades="openTrades"
-          :clickMode="clickMode"
-          @chart-click="handleChartClick"
-        />
-      </div>
+        <div class="p-3.5">
+          <ChartComponent
+            :symbol="selectedSymbol"
+            :interval="selectedTimeframe"
+            :trades="openTrades"
+            :clickMode="clickMode"
+            @chart-click="handleChartClick"
+          />
+        </div>
+      </TermPanel>
 
-      <!-- New Trade Form -->
-      <div>
-        <div class="chart-container">
-          <h3 class="text-lg font-semibold mb-4">New Trade</h3>
-          <div class="space-y-3">
+      <!-- Right column: order form -->
+      <div class="side-column flex flex-col gap-5">
+        <TermPanel title="new_order.sh" tone="surface">
+          <form class="flex flex-col gap-3" @submit.prevent="submitTrade">
             <!-- Side Toggle -->
-            <div class="flex gap-2">
+            <div class="flex gap-2" role="group" aria-label="Side">
               <button
+                type="button"
                 @click="tradeForm.trade_type = 'BUY'"
-                :class="['btn flex-1 text-sm', tradeForm.trade_type === 'BUY' ? 'btn-success' : 'btn-secondary']"
-              >Buy</button>
+                class="flex-1"
+                :class="tradeForm.trade_type === 'BUY' ? 't-btn' : 't-btn-ghost'"
+                :aria-pressed="tradeForm.trade_type === 'BUY'"
+              >LONG</button>
               <button
+                type="button"
                 @click="tradeForm.trade_type = 'SELL'"
-                :class="['btn flex-1 text-sm', tradeForm.trade_type === 'SELL' ? 'btn-danger' : 'btn-secondary']"
-              >Sell</button>
+                class="flex-1 font-extrabold"
+                :class="tradeForm.trade_type === 'SELL' ? 't-btn-short' : 't-btn-ghost'"
+                :aria-pressed="tradeForm.trade_type === 'SELL'"
+              >SHORT</button>
             </div>
 
             <!-- Price Inputs -->
-            <div>
-              <label class="text-xs text-dark-400 block mb-1">Entry Price</label>
-              <div class="flex gap-1">
-                <input v-model.number="tradeForm.entry_price" type="number" step="0.01"
-                  class="flex-1 px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white focus:border-secondary-500 focus:outline-none" />
-                <button @click="startClickMode('entry')" :class="['btn text-xs px-2', clickMode === 'entry' ? 'btn-primary' : 'btn-secondary']" title="Click chart to set">+</button>
-              </div>
+            <div v-for="field in priceFields" :key="field.key" class="flex items-center gap-2.5">
+              <label :for="'order-' + field.key" class="w-24 shrink-0 text-muted">{{ field.flag }}</label>
+              <input
+                :id="'order-' + field.key"
+                v-model.number="tradeForm[field.key]"
+                type="number"
+                :step="field.step"
+                class="t-input flex-1"
+                :class="field.color"
+              />
+              <button
+                v-if="field.mode"
+                type="button"
+                @click="startClickMode(field.mode)"
+                class="t-btn-ghost px-2.5 py-1.5"
+                :class="{ 'is-active': clickMode === field.mode }"
+                :aria-label="'Pick ' + field.flag.replace('--', '') + ' on chart'"
+                :aria-pressed="clickMode === field.mode"
+              >+</button>
             </div>
 
-            <div>
-              <label class="text-xs text-dark-400 block mb-1">Stop Loss</label>
-              <div class="flex gap-1">
-                <input v-model.number="tradeForm.stop_loss" type="number" step="0.01"
-                  class="flex-1 px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white focus:border-secondary-500 focus:outline-none" />
-                <button @click="startClickMode('sl')" :class="['btn text-xs px-2', clickMode === 'sl' ? 'btn-primary' : 'btn-secondary']" title="Click chart to set">+</button>
-              </div>
+            <div class="text-muted leading-relaxed">
+              risk <span class="text-down">{{ riskReward ? '-' + riskReward.risk.toFixed(2) : '--' }}</span>
+              · reward <span class="text-up">{{ riskReward ? '+' + riskReward.reward.toFixed(2) : '--' }}</span>
+              · r:r <span class="text-term-text">{{ riskReward ? '1:' + riskReward.rr.toFixed(2) : '--' }}</span>
+              <br>
+              <span class="text-accent" aria-hidden="true">[{{ rrBar }}]</span> r:r out of 3
             </div>
 
-            <div>
-              <label class="text-xs text-dark-400 block mb-1">Take Profit</label>
-              <div class="flex gap-1">
-                <input v-model.number="tradeForm.take_profit" type="number" step="0.01"
-                  class="flex-1 px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white focus:border-secondary-500 focus:outline-none" />
-                <button @click="startClickMode('tp')" :class="['btn text-xs px-2', clickMode === 'tp' ? 'btn-primary' : 'btn-secondary']" title="Click chart to set">+</button>
-              </div>
+            <div v-if="clickMode" class="text-accent">
+              &gt; click the chart to set {{ clickMode === 'entry' ? 'entry' : clickMode === 'sl' ? 'stop loss' : 'take profit' }}<span class="cursor-text" aria-hidden="true"> _</span>
             </div>
 
-            <div>
-              <label class="text-xs text-dark-400 block mb-1">Quantity</label>
-              <input v-model.number="tradeForm.quantity" type="number" step="0.001"
-                class="w-full px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white focus:border-secondary-500 focus:outline-none" />
-            </div>
-
-            <button @click="submitTrade" class="btn btn-primary w-full text-sm" :disabled="!tradeForm.entry_price || !tradeForm.quantity">
-              Place Trade
-            </button>
-
-            <div v-if="clickMode" class="text-xs text-secondary-400 text-center animate-pulse">
-              Click on chart to set {{ clickMode === 'entry' ? 'Entry' : clickMode === 'sl' ? 'Stop Loss' : 'Take Profit' }}
-            </div>
-          </div>
-        </div>
+            <button
+              type="submit"
+              class="t-btn justify-start py-3.5"
+              :disabled="!tradeForm.entry_price || !tradeForm.quantity"
+            >$ ./execute --{{ isRealTrading ? 'real' : 'paper' }} ⏎</button>
+          </form>
+        </TermPanel>
+        <SysLog class="flex-1" />
       </div>
     </div>
 
     <!-- Active Trades -->
-    <div v-if="openTrades.length > 0" class="chart-container">
-      <h2 class="text-xl font-semibold mb-4">Active Trades</h2>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="border-b border-dark-700">
+    <TermPanel title="ps --positions" tone="surface" flush>
+      <template #meta>
+        <span>{{ openTrades.length }} running</span>
+        <span v-if="openTrades.length > 0">
+          unrealized
+          <span class="font-bold" :class="totalUnrealized >= 0 ? 'text-up' : 'text-down'">
+            {{ totalUnrealized >= 0 ? '+' : '' }}{{ totalUnrealized.toFixed(2) }} USDT
+          </span>
+        </span>
+      </template>
+      <div v-if="openTrades.length === 0" class="px-3.5 py-4 text-muted">
+        no running positions on {{ selectedLabel }}
+      </div>
+      <div v-else class="overflow-x-auto">
+        <table class="t-table">
+          <thead>
             <tr>
-              <th class="text-left py-2 text-dark-400">Symbol</th>
-              <th class="text-left py-2 text-dark-400">Side</th>
-              <th class="text-left py-2 text-dark-400">Entry</th>
-              <th class="text-left py-2 text-dark-400">Current</th>
-              <th class="text-left py-2 text-dark-400">SL</th>
-              <th class="text-left py-2 text-dark-400">TP</th>
-              <th class="text-left py-2 text-dark-400">Qty</th>
-              <th class="text-left py-2 text-dark-400">P&L</th>
-              <th class="text-left py-2 text-dark-400">R</th>
-              <th class="text-left py-2 text-dark-400"></th>
+              <th>PID</th>
+              <th>Symbol</th>
+              <th>Side</th>
+              <th>Entry</th>
+              <th>Mark</th>
+              <th>SL</th>
+              <th>TP</th>
+              <th>Qty</th>
+              <th>P&amp;L</th>
+              <th>R</th>
+              <th><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="trade in openTrades" :key="trade.id" class="border-b border-dark-800 hover:bg-dark-800 transition">
-              <td class="py-3">{{ trade.symbol }}</td>
-              <td class="py-3" :class="trade.trade_type === 'BUY' ? 'text-positive' : 'text-negative'">
-                {{ trade.trade_type }}
+            <tr v-for="trade in openTrades" :key="trade.id">
+              <td class="text-muted">{{ formatPid(trade.id) }}</td>
+              <td>{{ trade.symbol }}</td>
+              <td :class="trade.trade_type === 'BUY' ? 'text-up' : 'text-down'">
+                {{ trade.trade_type === 'BUY' ? 'LONG' : 'SHORT' }}
               </td>
-              <td class="py-3">${{ trade.entry_price.toFixed(2) }}</td>
-              <td class="py-3">
-                {{ currentPrices[trade.symbol] ? '$' + currentPrices[trade.symbol].toFixed(2) : '-' }}
+              <td>{{ formatPrice(trade.entry_price) }}</td>
+              <td>{{ currentPrices[trade.symbol] ? formatPrice(currentPrices[trade.symbol]) : '--' }}</td>
+              <td class="text-down">{{ trade.stop_loss ? formatPrice(trade.stop_loss) : '--' }}</td>
+              <td class="text-tp">{{ trade.take_profit ? formatPrice(trade.take_profit) : '--' }}</td>
+              <td>{{ trade.quantity }}</td>
+              <td class="font-bold" :class="getTradePnL(trade) >= 0 ? 'text-up' : 'text-down'">
+                {{ currentPrices[trade.symbol] ? (getTradePnL(trade) >= 0 ? '+' : '') + getTradePnL(trade).toFixed(2) : '--' }}
               </td>
-              <td class="py-3 text-red-400">{{ trade.stop_loss ? '$' + trade.stop_loss.toFixed(2) : '-' }}</td>
-              <td class="py-3 text-green-400">{{ trade.take_profit ? '$' + trade.take_profit.toFixed(2) : '-' }}</td>
-              <td class="py-3">{{ trade.quantity }}</td>
-              <td class="py-3 font-semibold" :class="getTradePnL(trade) >= 0 ? 'text-positive' : 'text-negative'">
-                {{ currentPrices[trade.symbol] ? (getTradePnL(trade) >= 0 ? '+' : '') + '$' + getTradePnL(trade).toFixed(2) : '-' }}
-              </td>
-              <td class="py-3 font-semibold text-secondary-400">
-                {{ formatR(trade) }}
-              </td>
-              <td class="py-3">
-                <button @click="closeTrade(trade.id)" class="text-red-400 hover:text-red-300 text-xs">Close</button>
+              <td>{{ formatR(trade) }}</td>
+              <td>
+                <button
+                  v-if="confirmKill !== trade.id"
+                  @click="confirmKill = trade.id"
+                  class="t-btn-danger"
+                >kill -9</button>
+                <span v-else class="inline-flex gap-1.5">
+                  <button @click="confirmKill = null; closeTrade(trade.id)" class="t-btn-danger">confirm</button>
+                  <button @click="confirmKill = null" class="t-btn-ghost px-2.5 py-1.5">esc</button>
+                </span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-    </div>
+    </TermPanel>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, inject, watch, onMounted, onUnmounted } from 'vue'
 import ChartComponent from '../components/ChartComponent.vue'
+import TermPanel from '../components/term/TermPanel.vue'
+import SysLog from '../components/term/SysLog.vue'
+import { useLogStore } from '../stores/log'
 import binanceWS from '../services/websocket'
 
 const STORAGE_KEY = 'trading_custom_pairs'
@@ -234,12 +268,75 @@ const tradeForm = ref({
   quantity: null,
 })
 
-const timeframes = [
-  { label: '1H', value: '1h' },
-  { label: '4H', value: '4h' },
-  { label: '1D', value: '1d' },
-  { label: '1W', value: '1w' }
+const priceFields = [
+  { key: 'entry_price', flag: '--entry', step: '0.01', mode: 'entry', color: '' },
+  { key: 'stop_loss', flag: '--sl', step: '0.01', mode: 'sl', color: 'text-down' },
+  { key: 'take_profit', flag: '--tp', step: '0.01', mode: 'tp', color: 'text-tp' },
+  { key: 'quantity', flag: '--qty', step: '0.001', mode: null, color: '' },
 ]
+
+// Planned risk and reward in quote currency, from the form values
+const riskReward = computed(() => {
+  const { entry_price: entry, stop_loss: sl, take_profit: tp, quantity: qty } = tradeForm.value
+  if (!entry || !sl || !tp || !qty) return null
+  const risk = Math.abs(entry - sl) * qty
+  const reward = Math.abs(tp - entry) * qty
+  if (risk === 0) return null
+  return { risk, reward, rr: reward / risk }
+})
+
+// Short hex id shown as the position "PID"
+const formatPid = (id) => '0x' + Number(id).toString(16)
+
+const hitLabel = (trade, price) => {
+  const isBuy = trade.trade_type === 'BUY'
+  const hitSl = trade.stop_loss && (isBuy ? price <= trade.stop_loss : price >= trade.stop_loss)
+  return hitSl ? 'SL' : 'TP'
+}
+
+const confirmKill = ref(null)
+
+const totalUnrealized = computed(() => openTrades.value.reduce((sum, t) => sum + getTradePnL(t), 0))
+
+const RR_CELLS = 20
+const rrBar = computed(() => {
+  const filled = riskReward.value ? Math.round(Math.min(riskReward.value.rr, 3) / 3 * RR_CELLS) : 0
+  return '■'.repeat(filled) + '□'.repeat(RR_CELLS - filled)
+})
+
+const isRealTrading = inject('isRealTrading')
+const log = useLogStore()
+
+const timeframes = [
+  { label: '1h', value: '1h' },
+  { label: '4h', value: '4h' },
+  { label: '1d', value: '1d' },
+  { label: '1w', value: '1w' }
+]
+
+// 24h ticker for the selected pair, shown in the chart header
+const symbolTicker = ref(null)
+let symbolTickerUnsub = null
+
+const subscribeSymbolTicker = async () => {
+  if (symbolTickerUnsub) symbolTickerUnsub()
+  symbolTicker.value = null
+  try {
+    await binanceWS.connect()
+  } catch (err) {
+    console.error('Failed to connect WebSocket:', err)
+    return
+  }
+  symbolTickerUnsub = binanceWS.subscribe(selectedSymbol.value, 'ticker', null, (data) => {
+    if (data.symbol !== selectedSymbol.value) return
+    symbolTicker.value = { price: data.price, priceChange: data.price_change, change: data.price_change_percent }
+  })
+}
+
+const formatPrice = (p) => p.toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: Math.abs(p) < 10 ? 4 : 2,
+})
 
 // Load custom pairs from localStorage
 const loadCustomPairs = () => {
@@ -358,6 +455,7 @@ const handleTradeTickerUpdate = (tickerData) => {
 
     if (shouldClose) {
       closingTrades.add(trade.id)
+      log.push('WARN', `${trade.symbol} hit ${hitLabel(trade, price)} @ ${price}`)
       closeTrade(trade.id, price)
     }
   }
@@ -423,10 +521,17 @@ const submitTrade = async () => {
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
+    const f = tradeForm.value
+    log.push('FILL', `${f.trade_type === 'BUY' ? 'LONG' : 'SHORT'} ${f.quantity} ${selectedSymbol.value} @ ${f.entry_price}`)
+    if (f.stop_loss || f.take_profit) {
+      log.push('SET', `TP ${f.take_profit || '--'} · SL ${f.stop_loss || '--'}`)
+    }
+
     // Reset form and refresh trades
     tradeForm.value = { trade_type: 'BUY', entry_price: null, stop_loss: null, take_profit: null, quantity: null }
     await fetchTrades()
   } catch (err) {
+    log.push('ERR', `order rejected: ${err.message}`)
     console.error('Failed to create trade:', err)
   }
 }
@@ -444,9 +549,11 @@ const closeTrade = async (tradeId, exitPrice = null) => {
     const response = await fetch(`/trading/api/v1/trades/${tradeId}`, options)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     closingTrades.delete(tradeId)
+    log.push('FILL', `closed position ${formatPid(tradeId)}${exitPrice !== null ? ' @ ' + exitPrice : ''}`)
     await fetchTrades()
   } catch (err) {
     closingTrades.delete(tradeId)
+    log.push('ERR', `close ${formatPid(tradeId)} failed: ${err.message}`)
     console.error('Failed to close trade:', err)
   }
 }
@@ -462,11 +569,13 @@ const handleChartClick = ({ mode, price }) => {
   if (mode === 'entry') tradeForm.value.entry_price = price
   else if (mode === 'sl') tradeForm.value.stop_loss = price
   else if (mode === 'tp') tradeForm.value.take_profit = price
+  log.push('SET', `${mode} = ${price}`)
   clickMode.value = null
 }
 
 // Watch for symbol changes to update stats + ticker subscription + trades
 watch(selectedSymbol, async () => {
+  subscribeSymbolTicker()
   await fetchTrades()
 })
 
@@ -479,11 +588,24 @@ const closeDropdown = (e) => {
 
 onMounted(async () => {
   document.addEventListener('click', closeDropdown)
+  subscribeSymbolTicker()
   await fetchTrades()
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', closeDropdown)
   tradeTickerUnsubs.value.forEach(unsub => unsub())
+  if (symbolTickerUnsub) symbolTickerUnsub()
 })
 </script>
+
+<style scoped>
+.chart-panel {
+  flex: 999 1 640px;
+}
+
+.side-column {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+</style>

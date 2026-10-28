@@ -3,6 +3,8 @@
  * Handles real-time market data streams
  */
 
+import { sysLog } from '../stores/log'
+
 const BINANCE_WS_URL = 'wss://stream.binance.com:9443/ws'
 
 class BinanceWebSocket {
@@ -41,6 +43,7 @@ class BinanceWebSocket {
 
         this.ws.onopen = () => {
           console.log('WebSocket connected')
+          sysLog('OK', 'ws handshake stream.binance.com')
           this.isConnected = true
           this.reconnectAttempts = 0
           this.isIntentionallyClosed = false
@@ -62,6 +65,7 @@ class BinanceWebSocket {
 
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error)
+          sysLog('ERR', 'ws error, stream.binance.com unreachable')
           this.isConnected = false
           this.connectPromise = null
           reject(error)
@@ -69,6 +73,7 @@ class BinanceWebSocket {
 
         this.ws.onclose = () => {
           console.log('WebSocket closed')
+          if (!this.isIntentionallyClosed) sysLog('WARN', 'ws connection closed')
           this.isConnected = false
           if (!this.isIntentionallyClosed) {
             this.reconnect()
@@ -90,12 +95,14 @@ class BinanceWebSocket {
   reconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('Max reconnection attempts reached')
+      sysLog('ERR', 'ws gave up after max reconnect attempts')
       return
     }
 
     this.reconnectAttempts++
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1)
     console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
+    sysLog('WARN', `ws reconnect in ${delay / 1000}s (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
 
     setTimeout(() => {
       this.connect().catch(() => {
@@ -160,6 +167,7 @@ class BinanceWebSocket {
    * Send subscription message to WebSocket
    */
   sendSubscribe(streamName) {
+    sysLog('OK', `subscribed ${streamName}`)
     const message = {
       method: 'SUBSCRIBE',
       params: [streamName],

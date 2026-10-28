@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { sysLog } from '../stores/log'
 
 const client = axios.create({
   baseURL: '/trading/api/v1',
@@ -22,6 +23,7 @@ client.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error('API Error:', error)
+    sysLog('ERR', `api ${error.config?.method?.toUpperCase() || ''} ${error.config?.url || ''} ${error.response?.status || error.message}`)
     return Promise.reject(error)
   }
 )
