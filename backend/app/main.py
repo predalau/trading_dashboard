@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 # Import routers
-from app.api import paper_trading, market_data, user, trades, bot, wallets, portfolio
+from app.api import paper_trading, market_data, user, trades, bot, wallets, portfolio, backtest
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +44,7 @@ app.include_router(trades.router, prefix="/api/v1", tags=["Trades"])
 app.include_router(bot.router, prefix="/api/v1/bot", tags=["Bot"])
 app.include_router(wallets.router, prefix="/api/v1", tags=["Wallets"])
 app.include_router(portfolio.router, prefix="/api/v1/portfolio", tags=["Portfolio"])
+app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["Backtest"])
 
 
 from app.database import SessionLocal

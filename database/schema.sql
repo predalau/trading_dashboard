@@ -113,6 +113,47 @@ CREATE TABLE IF NOT EXISTS wallets (
     UNIQUE (chain, address)
 );
 
+-- Historical OHLCV cache (backtesting)
+CREATE TABLE IF NOT EXISTS ohlcv (
+    id SERIAL PRIMARY KEY,
+    symbol VARCHAR(50) NOT NULL,
+    timeframe VARCHAR(10) NOT NULL,
+    ts BIGINT NOT NULL,
+    open DOUBLE PRECISION NOT NULL,
+    high DOUBLE PRECISION NOT NULL,
+    low DOUBLE PRECISION NOT NULL,
+    close DOUBLE PRECISION NOT NULL,
+    volume DOUBLE PRECISION NOT NULL,
+    CONSTRAINT uq_ohlcv_bar UNIQUE (symbol, timeframe, ts)
+);
+
+-- Strategy registry
+CREATE TABLE IF NOT EXISTS strategies (
+    id SERIAL PRIMARY KEY,
+    slug VARCHAR(100) UNIQUE NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    module VARCHAR(150) NOT NULL,
+    params JSONB DEFAULT '{}',
+    description VARCHAR(1000),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Backtest runs
+CREATE TABLE IF NOT EXISTS backtests (
+    id SERIAL PRIMARY KEY,
+    strategy_id INTEGER REFERENCES strategies(id),
+    symbol VARCHAR(50) NOT NULL,
+    timeframe VARCHAR(10) NOT NULL,
+    start_ts BIGINT,
+    end_ts BIGINT,
+    params JSONB DEFAULT '{}',
+    status VARCHAR(20) DEFAULT 'pending',
+    metrics JSONB,
+    equity_curve JSONB,
+    error VARCHAR(1000),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for better query performance
 CREATE INDEX idx_trades_account_id ON trades(account_id);
 CREATE INDEX idx_trades_symbol ON trades(symbol);
