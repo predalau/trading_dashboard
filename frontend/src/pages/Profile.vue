@@ -32,6 +32,9 @@
       </dl>
     </TermPanel>
 
+    <!-- Portfolio + wallets -->
+    <WalletPanel />
+
     <!-- Closed Trades History -->
     <HistoryTable :trades="closedTrades" />
   </div>
@@ -41,6 +44,7 @@
 import { ref, computed, inject, onMounted } from 'vue'
 import TermPanel from '../components/term/TermPanel.vue'
 import HistoryTable from '../components/term/HistoryTable.vue'
+import WalletPanel from '../components/term/WalletPanel.vue'
 
 const isRealTrading = inject('isRealTrading')
 
