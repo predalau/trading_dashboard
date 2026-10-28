@@ -1,28 +1,27 @@
-# ⚔️ InvesThor - Viking Trading Warrior
+# InvesThor
 
-### *Conquer the markets with the spirit of a Viking warrior!* 🛡️⚡
+A full-stack trading dashboard for managing assets and backtesting strategies: paper trading, live Binance market data, and both a web UI and a REST API.
 
-A comprehensive full-stack financial trading dashboard with paper trading capabilities, real-time market data integration, and both web UI and programmatic API access. Built with the fury of the North!
+The UI uses the **Terminal Ice** theme: a dark, monospace, terminal-style interface (near-black ground, `#202d3d` surfaces, cyan accent, no green).
 
-## ⚔️ Viking Features
+## Features
 
-- **⚡ Paper Trading Raiders**: Execute risk-free trades with virtual funds - a true warrior's playground
-- **🛡️ Multi-Exchange Alliances**:
-  - Binance (Live)
-  - Solana (Coming Soon)
-  - More exchanges planned
-- **⚔️ Battle Charts**: Professional financial charts with TradingView Lightweight Charts - see your victories in real-time
-- **👑 Empire Analytics**: Track performance, P&L, win rates, and trading statistics like a true Jarl
-- **🌩️ Sorcery API**: Programmatic trading access for algorithmic strategies - harness divine power
-- **🏰 Fortress UI**: Dark-themed, Viking-inspired dashboard built with Vue 3 and Tailwind CSS
-- **💾 Eternal Scrolls**: PostgreSQL database storing your glorious conquests and trades
+- **Paper trading**: place LONG/SHORT trades with stop loss and take profit, auto-closed when either is hit
+- **Live charts**: TradingView Lightweight Charts fed by Binance REST + WebSocket, with entry/SL/TP lines and click-to-set prices
+- **Live ticker and `sys.log`**: header ticker strip and an event log of connections, fills, SL/TP hits and API errors
+- **Positions and history**: `ps --positions` table with live P&L and R, `cat history.log` of closed trades
+- **Profile stats**: equity, total P&L, win rate and average realized R
+- **Exchanges**: Binance (live), Solana and more planned
+- **REST API**: programmatic access for algorithmic strategies
+- **PostgreSQL** storage for accounts and trades
 
 ## Tech Stack
 
 ### Frontend
-- **Framework**: Vue 3 with TypeScript support
+- **Framework**: Vue 3
 - **Build Tool**: Vite
-- **Styling**: Tailwind CSS + Pure CSS Animations
+- **Styling**: Tailwind CSS + CSS design tokens (Terminal Ice theme), pure CSS animations
+- **Font**: JetBrains Mono (self-hosted via `@fontsource/jetbrains-mono`)
 - **Charts**: TradingView Lightweight Charts
 - **State Management**: Pinia
 - **HTTP Client**: Axios
@@ -45,13 +44,14 @@ A comprehensive full-stack financial trading dashboard with paper trading capabi
 trading-dashboard/
 ├── frontend/                 # Vue 3 + Vite application
 │   ├── src/
-│   │   ├── components/      # Reusable Vue components
-│   │   ├── pages/           # Route pages
-│   │   ├── stores/          # Pinia state management
+│   │   ├── components/      # ChartComponent + term/ UI building blocks
+│   │   ├── pages/           # Home, Dashboard, Trades, Profile
+│   │   ├── stores/          # Pinia stores (trading, log)
+│   │   ├── services/        # Binance WebSocket client
 │   │   ├── api/             # API client utilities
 │   │   ├── App.vue          # Root component
 │   │   ├── main.js          # Entry point
-│   │   └── style.css        # Global styles
+│   │   └── style.css        # Design tokens and shared .t-* styles
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.js
@@ -161,6 +161,12 @@ Frontend will be available at `http://localhost:5173`
 - `PUT /api/v1/paper-trading/trades/{trade_id}` - Close a trade
 - `GET /api/v1/paper-trading/portfolio/{account_id}` - Get portfolio summary
 
+#### Trades (used by the web UI)
+- `GET /api/v1/trades/?symbol=&open=` - List trades, filter by symbol and open/closed
+- `POST /api/v1/trades/` - Create a trade
+- `PATCH /api/v1/trades/{trade_id}` - Update SL, TP or notes
+- `DELETE /api/v1/trades/{trade_id}` - Close a trade (optional `exit_price` body)
+
 #### Market Data
 - `GET /api/v1/market/price/{symbol}` - Get current price
 - `GET /api/v1/market/klines/{symbol}` - Get candlestick data
@@ -263,9 +269,11 @@ Set appropriate environment variables:
 ## Roadmap
 
 - [ ] User authentication (JWT)
-- [ ] Advanced order types (Stop Loss, Take Profit, OCO)
+- [x] Stop loss and take profit (auto-closed client-side)
+- [ ] Advanced order types (OCO, trailing stop)
 - [ ] More exchange integrations (Solana, Kraken, etc.)
-- [ ] Real-time WebSocket updates
+- [x] Real-time prices via Binance WebSocket
+- [x] Terminal Ice UI redesign
 - [ ] Strategy backtesting engine
 - [ ] Advanced analytics and reporting
 - [ ] Mobile app
@@ -319,4 +327,4 @@ For issues, questions, or suggestions:
 
 ---
 
-**Happy Trading! 📈**
+**Happy trading.**

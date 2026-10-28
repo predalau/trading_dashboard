@@ -1,6 +1,6 @@
-# 🛡️ InvesThor - Docker Startup Guide
+# InvesThor - Docker Startup Guide
 
-Welcome to **InvesThor** - The Viking Trading Warrior! ⚔️⚡
+How to run **InvesThor** with Docker Compose.
 
 This guide will help you launch your trading empire using Docker.
 
@@ -52,12 +52,12 @@ investhor_db         Up 2 minutes
 
 ## Container Names (Updated for InvesThor)
 
-Your containers are now named with Viking honor:
+Container names:
 
 ```
-⚔️ investhor_frontend    - Vue 3 Trading Dashboard
-🛡️ investhor_backend     - FastAPI Backend Server
-💾 investhor_db          - PostgreSQL Database
+investhor_frontend    - Vue 3 Trading Dashboard
+investhor_backend     - FastAPI Backend Server
+investhor_db          - PostgreSQL Database
 ```
 
 Check running containers:
@@ -157,7 +157,7 @@ curl http://localhost:8001/health
 ### 4. Visit Dashboard in Browser
 Open: **http://localhost:5174**
 
-You should see the InvesThor logo and Viking-themed interface! ⚔️
+You should see the `INVESTHOR` ASCII logo and the dark Terminal Ice interface (tabs `[0] home` to `[3] profile`, cyan status bar).
 
 ---
 
@@ -488,4 +488,4 @@ If issues arise:
 
 ---
 
-**Valhalla awaits! May your trades be victorious! ⚔️🛡️⚡**
+**Happy trading.**

@@ -1,4 +1,4 @@
-# 🛡️ InvesThor Security Guide
+# InvesThor Security Guide
 
 ## Credentials & Environment Variables
 
@@ -346,4 +346,4 @@ Then:
 
 ---
 
-**Your InvesThor fortress is now secure! 🛡️⚔️**
+**Your InvesThor setup is now secure.**
