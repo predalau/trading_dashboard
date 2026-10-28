@@ -75,24 +75,27 @@ PostgreSQL: SELECT * FROM paper_trading_accounts
 ## Project Structure
 
 ### Frontend (`/frontend`)
-- **`src/pages/`** - Three main pages: Home.vue, Dashboard.vue, Trades.vue
+- **`src/pages/`** - Four pages: Home.vue, Dashboard.vue, Trades.vue, Profile.vue
 - **`src/components/ChartComponent.vue`** - TradingView Lightweight Charts integration
 - **`src/stores/trading.js`** - Pinia state management for trading data
+- **`src/stores/log.js`** - Pinia store behind the `sys.log` panel; call `sysLog(level, msg)` from services (levels OK, FILL, SET, WARN, ERR)
+- **`src/services/websocket.js`** - Binance WebSocket client (`binanceWS.subscribe(symbol, 'ticker' | 'klines', interval, cb)`)
 - **`src/api/client.js`** - Axios HTTP client configured for `/trading/api/v1` base URL
 - **`src/style.css`** - Terminal Ice design tokens (CSS variables) and shared `.t-*` primitives
 - **`src/components/term/`** - Terminal UI building blocks (TermPanel, header, nav, status bar, sys.log, history table)
 - **`vite.config.js`** - Critical: `base: '/trading/'` tells Vite to serve from `/trading/` path
-- **`tailwind.config.js`** - Color palette defined here (dark theme with purple accents)
+- **`tailwind.config.js`** - `term-*` colours mapped to the CSS variables, JetBrains Mono, square corners
 
 **Key Frontend Patterns:**
 - Routes are defined in `src/router/index.js`
-- API calls use `client.js` which prefixes all requests with `/trading/api/v1`
+- Pages call the API with `fetch('/trading/api/v1/...')`; `client.js` (axios) has the same base URL and logs errors to `sys.log`
 - Pinia stores (`stores/trading.js`) handle global state
 - All CSS uses Tailwind or custom CSS with no JavaScript animations (performance)
 
 ### Backend (`/backend`)
 - **`app/main.py`** - FastAPI app setup, CORS, route registration
-- **`app/api/`** - Three endpoint modules:
+- **`app/api/`** - Four endpoint modules:
+  - `trades.py` - 4 endpoints the UI uses: list/create/update/close trades on the first account (`profit_loss` is not returned yet)
   - `paper_trading.py` - 6 endpoints for trading accounts, trades, portfolio
   - `market_data.py` - 4 endpoints for prices, candlesticks, symbols
   - `user.py` - 2 endpoints for user registration/profile
@@ -168,7 +171,7 @@ SELECT * FROM trades ORDER BY created_at DESC LIMIT 10;
 ## Frontend Details
 
 ### Vue Router Setup (`src/router/index.js`)
-- Routes: `/` (home), `/dashboard`, `/trades`
+- Routes: `/` (home), `/dashboard`, `/trades`, `/profile` (tabs `[0]` to `[3]`, number keys switch)
 - All routes have base path `/trading/` configured
 - No authentication guards (yet)
 
@@ -180,12 +183,11 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 ```
-All API calls use this client, so requests automatically get `/trading/api/v1` prefix.
+Requests made through this client get the `/trading/api/v1` prefix. Most pages still use `fetch` with the full `/trading/api/v1/...` path.
 
 ### Pinia Store (`src/stores/trading.js`)
-- Manages trading data state globally
-- Accesses API via the `client` imported from `api/client.js`
-- Components dispatch actions, store handles API calls
+- Defines account/trade/portfolio state and actions
+- Uses `fetch('/api/v1/...')` without the `/trading` prefix, and the pages do not use it yet; pages fetch their own data
 
 ### Styling System
 - **Tailwind**: Configured in `tailwind.config.js`, used for layout and responsive design

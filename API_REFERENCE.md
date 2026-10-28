@@ -179,6 +179,63 @@ GET /paper-trading/portfolio/{account_id}
 
 ---
 
+## Trades Endpoints
+
+These are the endpoints the web UI uses (Dashboard and Trades pages). They work on the first paper trading account.
+
+### List Trades
+
+```
+GET /trades/
+GET /trades/?symbol=BTCUSDT&open=true
+GET /trades/?open=false
+```
+
+Query params (both optional): `symbol`, `open` (`true` | `false`). Newest first.
+
+**Response (200):** an array of trades with `id`, `symbol`, `trade_type`, `entry_price`, `stop_loss`, `take_profit`, `quantity`, `exit_price`, `is_open`, `notes`, `entry_time`, `created_at`.
+
+Note: `profit_loss` and `exit_time` are stored but not returned yet. The UI derives P&L from `exit_price`.
+
+### Create Trade
+
+```
+POST /trades/
+```
+
+**Request Body:**
+```json
+{
+  "symbol": "BTCUSDT",
+  "trade_type": "BUY",
+  "entry_price": 67412.5,
+  "stop_loss": 66100,
+  "take_profit": 68900,
+  "quantity": 0.05,
+  "notes": "optional"
+}
+```
+
+Returns `400` if no trading account exists.
+
+### Update Trade
+
+```
+PATCH /trades/{trade_id}
+```
+
+Body (all optional): `stop_loss`, `take_profit`, `notes`.
+
+### Close Trade
+
+```
+DELETE /trades/{trade_id}
+```
+
+Optional body `{"exit_price": 67500}`. With an exit price, `profit_loss` is calculated and stored. The Dashboard sends the live price when SL or TP is hit.
+
+---
+
 ## Market Data Endpoints
 
 ### Get Current Price
@@ -439,7 +496,7 @@ Currently no rate limiting. Add for production.
 
 ## WebSocket Support
 
-Coming soon for real-time updates.
+The backend has no WebSocket endpoint. The frontend streams live prices and candles straight from Binance (`wss://stream.binance.com:9443/ws`, see `frontend/src/services/websocket.js`).
 
 ## Pagination
 

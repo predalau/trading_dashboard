@@ -1,50 +1,42 @@
-# 🛡️ START HERE - InvesThor Quick Start
+# START HERE: InvesThor Quick Start
 
-## The Legendary 2-Command Launch! ⚔️⚡
-
-Welcome to **InvesThor** - The Viking Trading Warrior! 
-
-This is your fastest path to glory. Just 2 commands and you're trading!
+Two commands and you're trading.
 
 ---
 
-## 🚀 Launch Your Empire (2 Commands)
+## Launch (2 commands)
 
-### Command 1: Go to Project
+### 1. Go to the project
 ```bash
 cd /home/preda/trading_dashboard
 ```
 
-### Command 2: Awaken the Warriors
+### 2. Start the containers
 ```bash
 docker-compose up -d
 ```
 
-**That's it!** Your fleet is rising! 🏰
+---
+
+## Open the app
+
+### Trading dashboard
+**http://localhost:5174**
+
+You should see the Terminal Ice interface:
+- The `INVESTHOR` ASCII logo and a `root@investhor:~#` prompt line
+- tmux-style tabs: `[0] home`, `[1] dashboard`, `[2] trades`, `[3] profile` (press `0` to `3` to switch)
+- A live BTC / ETH / SOL ticker and a cyan status bar at the bottom
+- Dark near-black background, `#202d3d` panels, cyan accent, JetBrains Mono
+
+### API documentation
+**http://localhost:8001/docs**
 
 ---
 
-## 🌐 Access Your Dashboard
+## Verify everything works
 
-### **Main Trading Dashboard**
-👉 **http://localhost:5174** ⚔️
-
-This is where the magic happens! You'll see:
-- ⚔️ InvesThor logo (Viking warrior)
-- 🛡️ Golden Viking-themed interface
-- Navigation: Home, Dashboard, Raids
-- Gold and amber colors (Viking gold!)
-
-### **API Documentation**
-👉 **http://localhost:8001/docs**
-
-Test all API endpoints interactively here!
-
----
-
-## ✅ Verify Everything Works
-
-### Step 1: Check Containers Are Running
+### 1. Containers are running
 ```bash
 docker-compose ps
 ```
@@ -56,62 +48,59 @@ investhor_backend    Up 2 minutes
 investhor_db         Up 2 minutes
 ```
 
-### Step 2: Test the API
+### 2. The API answers
 ```bash
 curl http://localhost:8001/health
 ```
 
 Should return: `{"status": "healthy"}`
 
-### Step 3: Open Browser
-Open: **http://localhost:5174**
-
-See the InvesThor logo? ⚔️ You're ready!
+### 3. The browser loads
+Open **http://localhost:5174**. If the ASCII logo shows and the `ws` dot in the tab bar turns cyan, the live feed is connected.
 
 ---
 
-## 🎯 Your First Trade (Raid!)
+## Your first trade
 
-1. **Open** http://localhost:5174
-2. **Click** "Begin Your Saga" (Home page)
-3. **Create** a paper trading account with $10,000
-4. **Click** "Raids" in navigation
-5. **Plan** your first raid:
-   - Symbol: BTCUSDT
-   - Type: BUY
-   - Entry Price: 43000
-   - Quantity: 0.5
-6. **Click** "⚔️ Launch Raid"
-7. **Monitor** on Dashboard
-
-Congratulations! You've conquered your first trade! 🏆
+1. Make sure a paper trading account exists (create one via `POST /api/v1/paper-trading/accounts` in the API docs).
+2. Open **[1] dashboard**.
+3. Pick a pair in the chart header (`BTC/USDT ▾`).
+4. In `new_order.sh`:
+   - Choose `LONG` or `SHORT`
+   - Fill `--entry`, `--sl`, `--tp`, `--qty` (or press `+` and click the chart to set a price)
+   - Check the risk / reward line
+5. Press `$ ./execute --paper`.
+6. Watch the position in `ps --positions` and the fill in `tail -f sys.log`.
 
 ---
 
-## 📊 What You Can Do
+## What you can do
 
-### 📈 Dashboard (Battle Command Center)
-- View your War Chest (account balance)
-- Track Empire Worth (portfolio value)
-- Monitor Active Raids (open positions)
-- See Glory Rate (win percentage)
-- View Bitcoin battle chart
+### [1] dashboard
+- Live candlestick chart with entry, SL and TP lines
+- Live price and 24h change for the selected pair
+- `new_order.sh` order form with risk / reward and r:r bar
+- `tail -f sys.log`: connections, fills, SL/TP hits, errors
+- `ps --positions`: open trades with live P&L and R; `kill -9` closes one (with confirm)
+- Trades auto-close when the live price hits SL or TP
 
-### 🛡️ Raids (Trading Hall)
-- Plan new raids (create trades)
-- View active conquests (open positions)
-- End your raids (close positions)
-- Read Chronicles of Battle (trade history)
+### [2] trades
+- Place trades for any listed pair, with notes
+- See and close open positions (`close_position.sh` asks for the exit price)
+- `cat history.log`: closed trades, newest first
 
-### 🌐 API
-- Create accounts programmatically
-- Execute trades via REST API
-- Get real-time market prices
-- Integrate with your own systems
+### [3] profile
+- Equity, total P&L, win rate, average realized R
+- `whoami` account details and the trade history
+
+### API
+- Create accounts and trades programmatically
+- Get market prices and candles
+- See **API_REFERENCE.md**
 
 ---
 
-## 🛠️ Useful Commands
+## Useful commands
 
 ```bash
 # Stop everything
@@ -141,7 +130,7 @@ docker-compose down -v
 
 ---
 
-## 🐛 Something Not Working?
+## Something not working?
 
 ### Frontend won't load?
 ```bash
@@ -149,6 +138,9 @@ docker-compose down -v
 # Check logs:
 docker-compose logs investhor_frontend
 ```
+
+### Chart stuck on `[..] loading`, or the `ws` dot is orange?
+The browser can't reach `stream.binance.com:9443`, or the backend `/market/klines` call failed. `sys.log` shows `[ERR]` lines with the reason.
 
 ### API not responding?
 ```bash
@@ -171,95 +163,59 @@ lsof -i :8001
 kill -9 <PID>
 ```
 
+### Blank page or "Failed to resolve @fontsource/jetbrains-mono" after updating?
+The frontend's `node_modules` lives in an anonymous volume. Rebuild and renew it:
+```bash
+docker-compose up -d --build -V frontend
+```
+
 ### Still stuck?
-See **DOCKER_STARTUP.md** for complete troubleshooting!
+See **DOCKER_STARTUP.md** for full troubleshooting.
 
 ---
 
-## 📚 Documentation Index
+## Documentation index
 
-| Want to... | Read This |
+| Want to... | Read this |
 |-----------|-----------|
-| **Quick 5-min setup** | ← You are here! |
+| **Quick 5-min setup** | You are here |
 | **Full Docker guide** | DOCKER_STARTUP.md |
 | **Deploy with Caddy** | CADDY_SETUP.md |
 | **All API endpoints** | API_REFERENCE.md |
 | **What changed** | INVESTHOR_CHANGES.md |
 | **System architecture** | ARCHITECTURE.md |
+| **Working on the code** | CLAUDE.md |
 
 ---
 
-## 🎨 What's New with InvesThor?
+## Common tasks
 
-Your trading dashboard now has **VIKING VIBES!** ⚔️
-
-✨ **Golden warrior theme**
-- Gold/amber colors throughout
-- ⚔️ Sword and shield icons
-- 🛡️ Battle-themed naming
-- ⚡ Thunder and lightning effects
-
-🏰 **Warrior-inspired interface**
-- "Raids" instead of "Trades"
-- "Battle Command Center" dashboard
-- "Plan Your Raid" forms
-- "Chronicles of Battle" history
-- "Valhalla awaits the bold traders" footer
-
-🎯 **Container names**
-- `investhor_frontend` (your battlefield)
-- `investhor_backend` (your war engine)
-- `investhor_db` (your treasure vault)
-
----
-
-## ⚡ Next Level Features
-
-### Paper Trading
-Trade with virtual money - no risk, only glory!
-
-### Real Market Data
-Connected to Binance API for real prices
-
-### Interactive Charts
-TradingView professional charts showing your battles
-
-### REST API
-Build bots and automate your raiding strategies
-
-### Live Analytics
-Track win rates, profits, and trading statistics
-
----
-
-## 🏆 Common Tasks
-
-### View Running Containers
+### View running containers
 ```bash
 docker ps | grep investhor
 ```
 
-### Access Database Directly
+### Access the database directly
 ```bash
 docker-compose exec investhor_db psql -U trading_user -d trading_dashboard
 # Then: SELECT * FROM trades;
 ```
 
-### Get Backend Shell
+### Get a backend shell
 ```bash
 docker-compose exec investhor_backend sh
 ```
 
-### Backup Your Trades
+### Back up your trades
 ```bash
 docker-compose exec investhor_db pg_dump -U trading_user trading_dashboard > backup.sql
 ```
 
 ---
 
-## 🚀 Ready to Deploy?
+## Ready to deploy?
 
-Want to share with the world? See **CADDY_SETUP.md** to:
+See **CADDY_SETUP.md** to:
 - Deploy on your server
 - Use a custom domain
 - Enable HTTPS
@@ -269,42 +225,8 @@ Access via: `https://yourdomain.com/trading`
 
 ---
 
-## 💪 You've Got This!
-
-```
-╔════════════════════════════════════════╗
-║  🛡️ InvesThor Trading Warrior 🛡️    ║
-║                                        ║
-║     Ready to Conquer Markets?          ║
-║                                        ║
-║  1. docker-compose up -d               ║
-║  2. Open http://localhost:5174         ║
-║  3. Begin Your Saga!                   ║
-║                                        ║
-║     Valhalla Awaits! ⚔️⚡           ║
-╚════════════════════════════════════════╝
-```
-
----
-
-## 🎯 Quick Links
+## Quick links
 
 - **Dashboard**: http://localhost:5174
 - **API Docs**: http://localhost:8001/docs
 - **Health Check**: http://localhost:8001/health
-
----
-
-## 📞 Help
-
-Stuck? Don't worry!
-1. Check: `docker-compose logs -f`
-2. Try: `docker-compose restart`
-3. Read: DOCKER_STARTUP.md
-4. Ask: Check INVESTHOR_CHANGES.md for what's new
-
----
-
-**May your trades be glorious and your portfolio ever-growing!** 🏆⚔️
-
-*InvesThor - The Viking Way to Trade* ⚡

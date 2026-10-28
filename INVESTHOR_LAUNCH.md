@@ -1,24 +1,22 @@
-# ⚔️ InvesThor Launch Protocol
+# InvesThor Launch Guide
 
-## The Viking Trading Warrior is Ready to Raid! 🛡️⚡
+How to start the stack and check it works.
 
 ---
 
-## 🚀 Quick Launch (2 Commands)
+## Quick Launch (2 Commands)
 
 ```bash
-# Step 1: Enter the fortress
+# Step 1: Go to the project
 cd trading_dashboard
 
-# Step 2: Awaken the warriors
+# Step 2: Start the containers
 docker-compose up -d
 ```
 
-That's it! Your Viking trading empire is rising! 🏰
-
 ---
 
-## 🌐 Access Your Empire
+## Access
 
 Once launched, visit:
 
@@ -30,12 +28,12 @@ Once launched, visit:
 
 ---
 
-## 🛡️ Your Containers (The Viking Crew)
+## Containers
 
 ```
-⚔️  investhor_frontend   - Vue 3 Battle Dashboard
-🛡️  investhor_backend    - FastAPI War Engine
-💾  investhor_db         - PostgreSQL Vault
+investhor_frontend   - Vue 3 dashboard (Terminal Ice UI)
+investhor_backend    - FastAPI backend
+investhor_db         - PostgreSQL
 ```
 
 Check them with:
@@ -45,13 +43,13 @@ docker-compose ps
 
 ---
 
-## 📊 Monitor Your Forces
+## Logs
 
 ```bash
 # See all logs
 docker-compose logs -f
 
-# See specific warrior (choose one)
+# One container
 docker-compose logs -f investhor_backend
 docker-compose logs -f investhor_frontend
 docker-compose logs -f investhor_db
@@ -59,7 +57,7 @@ docker-compose logs -f investhor_db
 
 ---
 
-## 🎯 First Raid (Test Everything)
+## Smoke Test
 
 ### 1. Check if frontend loads
 ```bash
@@ -77,14 +75,14 @@ curl http://localhost:8001/health
 Open: **http://localhost:5174**
 
 You should see:
-- ⚔️ InvesThor logo with Viking styling
-- Gold/amber color scheme (Viking gold!)
-- Navigation: Home, Dashboard, Raids
-- Warrior aesthetic throughout
+- The `INVESTHOR` ASCII logo and a `root@investhor:~#` prompt
+- Tabs `[0] home  [1] dashboard  [2] trades  [3] profile`
+- Near-black background, `#202d3d` panels, cyan accent, monospace text
+- A cyan status bar at the bottom (orange in REAL mode)
 
 ---
 
-## 📝 Useful Commands
+## Useful Commands
 
 ```bash
 # Stop everything
@@ -93,7 +91,7 @@ docker-compose stop
 # Stop and remove (keeps data)
 docker-compose down
 
-# Stop and REMOVE EVERYTHING including data ⚠️
+# Stop and REMOVE EVERYTHING including data
 docker-compose down -v
 
 # Restart everything
@@ -111,7 +109,7 @@ docker-compose exec investhor_db psql -U trading_user -d trading_dashboard
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Ports Already in Use?
 ```bash
@@ -153,7 +151,7 @@ docker-compose logs investhor_backend
 
 ---
 
-## 📚 Full Documentation
+## Full Documentation
 
 | Document | Purpose |
 |----------|---------|
@@ -162,60 +160,62 @@ docker-compose logs investhor_backend
 | **API_REFERENCE.md** | All API endpoints |
 | **ARCHITECTURE.md** | System design |
 | **README.md** | Full project docs |
+| **CLAUDE.md** | Code structure and styling system |
 
 ---
 
-## 🏆 What's New with InvesThor
+## What's New
 
-✨ **Viking Branding**:
-- ⚔️ Sword and shield icons
-- 🛡️ Gold/amber color scheme (Norse warrior gold!)
-- 🌩️ Thunder symbols (⚡)
-- 📜 Battle-themed naming:
-  - "Raids" instead of "Trades"
-  - "Battle Command Center" instead of "Dashboard"
-  - "Plan Your Raid" for trade forms
-  - "Chronicles of Battle" for trade history
+**Terminal Ice redesign** (replaces the old purple/gold Viking theme):
+- Dark terminal look: near-black ground, `#202d3d` surfaces, cyan accent, orange for losses, no green
+- JetBrains Mono everywhere, ASCII logo, `╔═[ title ]` panel headers, CLI-style labels
+- New `tail -f sys.log` panel and a live ticker in the tab bar
+- See INVESTHOR_CHANGES.md for the full list
 
-🎨 **Visual Updates**:
-- Viking-inspired gold borders and accents
-- Enhanced glass-morphism with amber tones
-- Gradient buttons with shadow effects
-- Footer saying "Valhalla awaits the bold traders ⚡"
-
-🏗️ **Container Naming**:
+**Container naming**:
 - `investhor_frontend` (was trading_dashboard_ui)
 - `investhor_backend` (was trading_dashboard_api)
 - `investhor_db` (was trading_dashboard_db)
 
 ---
 
-## ⚡ Next Steps
+## Next Steps
 
-1. ✅ **Run**: `docker-compose up -d`
-2. ✅ **Visit**: http://localhost:5174
-3. ✅ **Create Account**: Click "Begin Your Saga" on home page
-4. ✅ **Launch Raid**: Go to "Raids" tab and create a trade
-5. ✅ **Monitor**: Check "Dashboard" for battle command center
-6. ✅ **Deploy**: Follow CADDY_SETUP.md for production
+1. **Run**: `docker-compose up -d`
+2. **Visit**: http://localhost:5174
+3. **Create account**: `POST /api/v1/paper-trading/accounts` (see below)
+4. **Trade**: open `[1] dashboard` or `[2] trades` and fill `new_order.sh`
+5. **Monitor**: watch `ps --positions` and `sys.log` on the dashboard
+6. **Deploy**: follow CADDY_SETUP.md for production
 
 ---
 
-## 🎯 Key Endpoints
+## Key Endpoints
 
 ```bash
 # Create Account
 POST http://localhost:8001/api/v1/paper-trading/accounts
 {
   "user_id": 1,
-  "account_name": "My Saga",
+  "account_name": "My Account",
   "initial_balance": 10000
 }
 
 # Get Price
 GET http://localhost:8001/api/v1/market/price/BTCUSDT
 
-# Create Trade (Raid)
+# Create Trade (what the web UI uses)
+POST http://localhost:8001/api/v1/trades/
+{
+  "symbol": "BTCUSDT",
+  "trade_type": "BUY",
+  "entry_price": 43000,
+  "stop_loss": 42000,
+  "take_profit": 45000,
+  "quantity": 0.5
+}
+
+# Create Trade (per account)
 POST http://localhost:8001/api/v1/paper-trading/trades/1
 {
   "symbol": "BTCUSDT",
@@ -234,7 +234,7 @@ PUT http://localhost:8001/api/v1/paper-trading/trades/1
 
 ---
 
-## 🎓 Learning Resources
+## Learning Resources
 
 - **Frontend**: Vue 3 docs + TradingView Lightweight Charts
 - **Backend**: FastAPI docs at http://localhost:8001/docs
@@ -243,7 +243,7 @@ PUT http://localhost:8001/api/v1/paper-trading/trades/1
 
 ---
 
-## 🤖 System Requirements
+## System Requirements
 
 - **CPU**: 2+ cores
 - **RAM**: 2GB minimum (4GB recommended)
@@ -252,7 +252,7 @@ PUT http://localhost:8001/api/v1/paper-trading/trades/1
 
 ---
 
-## 🌐 With Caddy Reverse Proxy
+## With Caddy Reverse Proxy
 
 Want to expose to the internet? See **CADDY_SETUP.md**:
 
@@ -263,7 +263,7 @@ https://yourdomain.com/trading/api/v1/* → API
 
 ---
 
-## 📞 Support Checklist
+## Support Checklist
 
 If something doesn't work:
 
@@ -273,27 +273,6 @@ If something doesn't work:
 - [ ] Try: `docker-compose restart`
 - [ ] Reset: `docker-compose down && docker-compose up -d --build`
 - [ ] Check ports: `lsof -i :5174` and `lsof -i :8001`
-
----
-
-## 🎉 You're Ready!
-
-```
-Your Viking Empire Awaits! ⚔️
-
-╔═══════════════════════════════════════╗
-║   ⚔️ InvesThor Trading Warrior ⚡    ║
-║                                       ║
-║   Status: READY FOR BATTLE            ║
-║   Containers: investhor_*             ║
-║   Frontend: localhost:5174            ║
-║   Backend: localhost:8001             ║
-║                                       ║
-║   May your trades be glorious! 🛡️   ║
-╚═══════════════════════════════════════╝
-```
-
-**Valhalla awaits the bold traders!** ⚡
 
 ---
 

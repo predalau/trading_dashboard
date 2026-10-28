@@ -5,21 +5,23 @@
 A complete full-stack financial trading dashboard with the following capabilities:
 
 ### ✅ Frontend (Vue 3 + Vite)
-- **Modern Dark Theme UI** with Tailwind CSS
-- **Professional Financial Charts** using TradingView Lightweight Charts
-- **Pure CSS Animations** for smooth, performant interactions
-- **Responsive Design** for desktop and tablet
+- **Terminal Ice UI**: dark terminal-style theme (CSS tokens + Tailwind, JetBrains Mono, no green)
+- **Professional Financial Charts** using TradingView Lightweight Charts with live Binance data
+- **Pure CSS Animations** (blinking caret, scanlines), off under reduced motion
+- **Responsive Design** from 390px phones (bottom tabs) to 1440px desktops
 - **Pinia State Management** for application state
 - **Component-Based Architecture** for reusability
 
 **Key Pages:**
-- **Home Page**: Welcome screen with feature overview
-- **Dashboard**: Real-time portfolio monitoring, charts, and analytics
-- **Trades**: Paper trading interface with buy/sell forms and trade history
+- **Home**: boot log, motd and command list
+- **Dashboard**: live chart, `new_order.sh` order form, `sys.log` event panel, `ps --positions` table
+- **Trades**: order form with notes, open positions, close dialog, `cat history.log`
+- **Profile**: equity, total P&L, win rate, average R, account details and history
 
 **Components:**
-- `ChartComponent.vue`: TradingView chart integration with sample data
-- Reusable card, button, and form components with consistent styling
+- `ChartComponent.vue`: TradingView chart with live Binance klines and entry/SL/TP lines
+- `components/term/`: TermPanel, TermHeader, TermNav, TickerStrip, StatusBar, SysLog, HistoryTable, AsciiLogo
+- Shared `.t-btn`, `.t-input`, `.t-table` styles in `style.css`
 
 ### ✅ Backend (FastAPI + PostgreSQL)
 - **RESTful API** with complete paper trading functionality
@@ -71,20 +73,25 @@ trading-dashboard/
 ├── frontend/                           # Vue 3 + Vite SPA
 │   ├── src/
 │   │   ├── components/
-│   │   │   └── ChartComponent.vue      # TradingView chart component
+│   │   │   ├── ChartComponent.vue      # TradingView chart component
+│   │   │   └── term/                   # Terminal UI building blocks
 │   │   ├── pages/
-│   │   │   ├── Home.vue               # Landing page
-│   │   │   ├── Dashboard.vue          # Main trading dashboard
-│   │   │   └── Trades.vue             # Trading interface
+│   │   │   ├── Home.vue               # Boot log + command list
+│   │   │   ├── Dashboard.vue          # Chart, orders, sys.log, positions
+│   │   │   ├── Trades.vue             # Orders, positions, history
+│   │   │   └── Profile.vue            # Stats and history
+│   │   ├── services/
+│   │   │   └── websocket.js           # Binance WebSocket client
 │   │   ├── stores/
-│   │   │   └── trading.js             # Pinia trading store
+│   │   │   ├── trading.js             # Pinia trading store
+│   │   │   └── log.js                 # sys.log event store
 │   │   ├── api/
 │   │   │   └── client.js              # Axios HTTP client
 │   │   ├── router/
 │   │   │   └── index.js               # Vue Router config
 │   │   ├── App.vue                    # Root component
 │   │   ├── main.js                    # Entry point
-│   │   └── style.css                  # Global styles
+│   │   └── style.css                  # Design tokens + shared styles
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.js                 # Vite configuration
@@ -99,6 +106,7 @@ trading-dashboard/
 │   │   │   ├── paper_trading.py       # Trading endpoints (6)
 │   │   │   ├── market_data.py         # Market data endpoints (4)
 │   │   │   ├── user.py                # User endpoints (2)
+│   │   │   ├── trades.py              # Trades endpoints used by the UI (4)
 │   │   │   └── __init__.py
 │   │   ├── services/
 │   │   │   ├── trading_service.py     # Trading business logic
@@ -184,8 +192,8 @@ trading-dashboard/
 - Extensible architecture for more exchanges (Solana ready)
 
 ### ✅ Professional UI/UX
-- Dark theme optimized for financial data viewing
-- Glass-morphism design with subtle animations
+- Terminal Ice theme: near-black ground, `#202d3d` surfaces, cyan accent, orange losses
+- Monospace, square corners, CLI-style labels, keyboard tab shortcuts (0 to 3)
 - Responsive layout for different screen sizes
 - Interactive charts with zoom and pan capabilities
 - Real-time data updates
@@ -417,4 +425,4 @@ This project is built with best practices in mind:
 - ✅ Scalable architecture
 - ✅ Performance optimizations
 
-**Happy Trading! 📈**
+**Happy trading.**
