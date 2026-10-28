@@ -98,66 +98,69 @@
         </div>
       </TermPanel>
 
-      <!-- New Trade Form -->
-      <div>
-        <div class="chart-container">
-          <h3 class="text-lg font-semibold mb-4">New Trade</h3>
-          <div class="space-y-3">
+      <!-- Right column: order form -->
+      <div class="side-column flex flex-col gap-5">
+        <TermPanel title="new_order.sh" tone="surface">
+          <form class="flex flex-col gap-3" @submit.prevent="submitTrade">
             <!-- Side Toggle -->
-            <div class="flex gap-2">
+            <div class="flex gap-2" role="group" aria-label="Side">
               <button
+                type="button"
                 @click="tradeForm.trade_type = 'BUY'"
-                :class="['btn flex-1 text-sm', tradeForm.trade_type === 'BUY' ? 'btn-success' : 'btn-secondary']"
-              >Buy</button>
+                class="flex-1"
+                :class="tradeForm.trade_type === 'BUY' ? 't-btn' : 't-btn-ghost'"
+                :aria-pressed="tradeForm.trade_type === 'BUY'"
+              >LONG</button>
               <button
+                type="button"
                 @click="tradeForm.trade_type = 'SELL'"
-                :class="['btn flex-1 text-sm', tradeForm.trade_type === 'SELL' ? 'btn-danger' : 'btn-secondary']"
-              >Sell</button>
+                class="flex-1 font-extrabold"
+                :class="tradeForm.trade_type === 'SELL' ? 't-btn-short' : 't-btn-ghost'"
+                :aria-pressed="tradeForm.trade_type === 'SELL'"
+              >SHORT</button>
             </div>
 
             <!-- Price Inputs -->
-            <div>
-              <label class="text-xs text-dark-400 block mb-1">Entry Price</label>
-              <div class="flex gap-1">
-                <input v-model.number="tradeForm.entry_price" type="number" step="0.01"
-                  class="flex-1 px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white focus:border-secondary-500 focus:outline-none" />
-                <button @click="startClickMode('entry')" :class="['btn text-xs px-2', clickMode === 'entry' ? 'btn-primary' : 'btn-secondary']" title="Click chart to set">+</button>
-              </div>
+            <div v-for="field in priceFields" :key="field.key" class="flex items-center gap-2.5">
+              <label :for="'order-' + field.key" class="w-24 shrink-0 text-muted">{{ field.flag }}</label>
+              <input
+                :id="'order-' + field.key"
+                v-model.number="tradeForm[field.key]"
+                type="number"
+                :step="field.step"
+                class="t-input flex-1"
+                :class="field.color"
+              />
+              <button
+                v-if="field.mode"
+                type="button"
+                @click="startClickMode(field.mode)"
+                class="t-btn-ghost px-2.5 py-1.5"
+                :class="{ 'is-active': clickMode === field.mode }"
+                :aria-label="'Pick ' + field.flag.replace('--', '') + ' on chart'"
+                :aria-pressed="clickMode === field.mode"
+              >+</button>
             </div>
 
-            <div>
-              <label class="text-xs text-dark-400 block mb-1">Stop Loss</label>
-              <div class="flex gap-1">
-                <input v-model.number="tradeForm.stop_loss" type="number" step="0.01"
-                  class="flex-1 px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white focus:border-secondary-500 focus:outline-none" />
-                <button @click="startClickMode('sl')" :class="['btn text-xs px-2', clickMode === 'sl' ? 'btn-primary' : 'btn-secondary']" title="Click chart to set">+</button>
-              </div>
+            <div class="text-muted leading-relaxed">
+              risk <span class="text-down">{{ riskReward ? '-' + riskReward.risk.toFixed(2) : '--' }}</span>
+              · reward <span class="text-up">{{ riskReward ? '+' + riskReward.reward.toFixed(2) : '--' }}</span>
+              · r:r <span class="text-term-text">{{ riskReward ? '1:' + riskReward.rr.toFixed(2) : '--' }}</span>
+              <br>
+              <span class="text-accent" aria-hidden="true">[{{ rrBar }}]</span> r:r out of 3
             </div>
 
-            <div>
-              <label class="text-xs text-dark-400 block mb-1">Take Profit</label>
-              <div class="flex gap-1">
-                <input v-model.number="tradeForm.take_profit" type="number" step="0.01"
-                  class="flex-1 px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white focus:border-secondary-500 focus:outline-none" />
-                <button @click="startClickMode('tp')" :class="['btn text-xs px-2', clickMode === 'tp' ? 'btn-primary' : 'btn-secondary']" title="Click chart to set">+</button>
-              </div>
+            <div v-if="clickMode" class="text-accent">
+              &gt; click the chart to set {{ clickMode === 'entry' ? 'entry' : clickMode === 'sl' ? 'stop loss' : 'take profit' }}<span class="cursor-text"> _</span>
             </div>
 
-            <div>
-              <label class="text-xs text-dark-400 block mb-1">Quantity</label>
-              <input v-model.number="tradeForm.quantity" type="number" step="0.001"
-                class="w-full px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white focus:border-secondary-500 focus:outline-none" />
-            </div>
-
-            <button @click="submitTrade" class="btn btn-primary w-full text-sm" :disabled="!tradeForm.entry_price || !tradeForm.quantity">
-              Place Trade
-            </button>
-
-            <div v-if="clickMode" class="text-xs text-secondary-400 text-center animate-pulse">
-              Click on chart to set {{ clickMode === 'entry' ? 'Entry' : clickMode === 'sl' ? 'Stop Loss' : 'Take Profit' }}
-            </div>
-          </div>
-        </div>
+            <button
+              type="submit"
+              class="t-btn justify-start py-3.5"
+              :disabled="!tradeForm.entry_price || !tradeForm.quantity"
+            >$ ./execute --{{ isRealTrading ? 'real' : 'paper' }} ⏎</button>
+          </form>
+        </TermPanel>
       </div>
     </div>
 
@@ -211,7 +214,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, inject, watch, onMounted, onUnmounted } from 'vue'
 import ChartComponent from '../components/ChartComponent.vue'
 import TermPanel from '../components/term/TermPanel.vue'
 import binanceWS from '../services/websocket'
@@ -244,6 +247,31 @@ const tradeForm = ref({
   take_profit: null,
   quantity: null,
 })
+
+const priceFields = [
+  { key: 'entry_price', flag: '--entry', step: '0.01', mode: 'entry', color: '' },
+  { key: 'stop_loss', flag: '--sl', step: '0.01', mode: 'sl', color: 'text-down' },
+  { key: 'take_profit', flag: '--tp', step: '0.01', mode: 'tp', color: 'text-tp' },
+  { key: 'quantity', flag: '--qty', step: '0.001', mode: null, color: '' },
+]
+
+// Planned risk and reward in quote currency, from the form values
+const riskReward = computed(() => {
+  const { entry_price: entry, stop_loss: sl, take_profit: tp, quantity: qty } = tradeForm.value
+  if (!entry || !sl || !tp || !qty) return null
+  const risk = Math.abs(entry - sl) * qty
+  const reward = Math.abs(tp - entry) * qty
+  if (risk === 0) return null
+  return { risk, reward, rr: reward / risk }
+})
+
+const RR_CELLS = 20
+const rrBar = computed(() => {
+  const filled = riskReward.value ? Math.round(Math.min(riskReward.value.rr, 3) / 3 * RR_CELLS) : 0
+  return '■'.repeat(filled) + '□'.repeat(RR_CELLS - filled)
+})
+
+const isRealTrading = inject('isRealTrading')
 
 const timeframes = [
   { label: '1h', value: '1h' },
@@ -529,5 +557,17 @@ onUnmounted(() => {
 <style scoped>
 .chart-panel {
   flex: 999 1 640px;
+}
+
+.side-column {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.t-btn-short {
+  @apply inline-flex items-center justify-center px-3.5 py-2.5 cursor-pointer;
+  background: var(--down);
+  color: var(--on-accent);
+  border: 1px solid var(--down);
 }
 </style>
