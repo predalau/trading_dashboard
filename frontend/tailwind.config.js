@@ -6,7 +6,24 @@ export default {
   ],
   theme: {
     extend: {
+      borderRadius: {
+        DEFAULT: '0',
+      },
       colors: {
+        term: {
+          bg: 'var(--bg)',
+          panel: 'var(--panel)',
+          surface: 'var(--surface)',
+          line: 'var(--line)',
+          grid: 'var(--grid)',
+          text: 'var(--text)',
+          muted: 'var(--muted)',
+          accent: 'var(--accent)',
+          up: 'var(--up)',
+          down: 'var(--down)',
+          tp: 'var(--tp)',
+          'on-accent': 'var(--on-accent)',
+        },
         dark: {
           50: '#f8fafc',
           100: '#f1f5f9',

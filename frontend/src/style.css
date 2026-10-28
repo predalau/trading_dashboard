@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Terminal Ice design tokens */
+:root {
+  --bg: #0c0f14;
+  --panel: #151a22;
+  --surface: #202d3d;
+  --line: #2c3d52;
+  --grid: #1c2838;
+  --text: #d6e2f0;
+  --muted: #8a9bb0;
+  --accent: #4fd6ff;
+  --up: #4fd6ff;
+  --down: #ff8a5c;
+  --tp: #c7b8ff;
+  --on-accent: #0a0f15;
+  --glow: rgba(79, 214, 255, 0.45);
+}
+
 * {
   margin: 0;
   padding: 0;
