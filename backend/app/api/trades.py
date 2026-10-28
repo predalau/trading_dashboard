@@ -1,38 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
 from app.database import get_db
 from app.models import Trade, TradeType, PaperTradingAccount
+from app.services.paper_accounting import (
+    realized_pl,
+    recompute_current_balance,
+    open_paper_position,
+    InsufficientBalance,
+)
 
 router = APIRouter()
-
-
-def realized_pl(trade_type, entry: float, exit_price: float, quantity: float):
-    """Return (pl, pl_pct) for a closed trade.
-
-    LONG (BUY) profits when price rises; SHORT (SELL) profits when price falls.
-    """
-    tt = trade_type.value if hasattr(trade_type, "value") else str(trade_type)
-    direction = 1 if tt.upper() == "BUY" else -1
-    pl = direction * (exit_price - entry) * quantity
-    pct = (pl / (entry * quantity) * 100) if entry and quantity else 0.0
-    return pl, pct
-
-
-def recompute_current_balance(db: Session, account: PaperTradingAccount) -> None:
-    """current_balance = free cash + margin reserved by still-open positions.
-
-    Opening a position moves notional from available into reserved (equity flat);
-    closing returns the margin +/- realized P&L (equity changes by P&L).
-    """
-    reserved = db.query(
-        func.coalesce(func.sum(Trade.entry_price * Trade.quantity), 0.0)
-    ).filter(Trade.account_id == account.id, Trade.is_open.is_(True)).scalar() or 0.0
-    account.current_balance = account.available_balance + reserved
 
 
 
@@ -115,27 +96,21 @@ async def create_trade(trade: TradeCreate, db: Session = Depends(get_db)):
     from app.services.account_service import get_or_create_default_account
     account = get_or_create_default_account(db)
 
-    cost = trade.entry_price * trade.quantity
-    if cost > account.available_balance:
-        raise HTTPException(status_code=400, detail="Insufficient balance for this trade")
+    try:
+        new_trade = open_paper_position(
+            db,
+            account,
+            symbol=trade.symbol,
+            side=trade.trade_type,
+            quantity=trade.quantity,
+            price=trade.entry_price,
+            stop_loss=trade.stop_loss,
+            take_profit=trade.take_profit,
+            notes=trade.notes,
+        )
+    except InsufficientBalance as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    new_trade = Trade(
-        account_id=account.id,
-        symbol=trade.symbol,
-        exchange="BINANCE",
-        trade_type=trade.trade_type,
-        entry_price=trade.entry_price,
-        stop_loss=trade.stop_loss,
-        take_profit=trade.take_profit,
-        quantity=trade.quantity,
-        notes=trade.notes,
-        is_open=True,
-    )
-
-    account.available_balance -= cost
-    db.add(new_trade)
-    db.flush()  # assign id + include this trade in the reserved-margin sum
-    recompute_current_balance(db, account)
     db.commit()
     db.refresh(new_trade)
 
