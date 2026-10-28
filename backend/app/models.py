@@ -80,6 +80,10 @@ class Order(Base):
     status = Column(SQLEnum(OrderStatus), default=OrderStatus.PENDING)
     filled_quantity = Column(Float, default=0)
     filled_price = Column(Float, nullable=True)
+    mode = Column(String(10), nullable=False, default="paper")  # paper | solana
+    api_key_id = Column(Integer, nullable=True, index=True)      # bot that placed it
+    client_order_id = Column(String(100), nullable=True)         # idempotency key
+    tx_signature = Column(String(128), nullable=True)            # solana settlement
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -108,3 +112,16 @@ class PortfolioSnapshot(Base):
     cash_balance = Column(Float, nullable=False)
     invested_value = Column(Float, nullable=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    label = Column(String(100), nullable=False)
+    key_prefix = Column(String(16), nullable=False)       # shown in UI, e.g. 'ith_ab12cd'
+    key_hash = Column(String(128), nullable=False, index=True)  # sha256 of full key
+    scopes = Column(String(255), nullable=False, default="paper:write")  # CSV
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_used_at = Column(DateTime(timezone=True), nullable=True)

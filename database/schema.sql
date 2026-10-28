@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS orders (
     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
     filled_quantity DECIMAL(20, 8) DEFAULT 0,
     filled_price DECIMAL(20, 8),
+    mode VARCHAR(10) NOT NULL DEFAULT 'paper',
+    api_key_id INTEGER,
+    client_order_id VARCHAR(100),
+    tx_signature VARCHAR(128),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -86,6 +90,18 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- API keys (bot authentication)
+CREATE TABLE IF NOT EXISTS api_keys (
+    id SERIAL PRIMARY KEY,
+    label VARCHAR(100) NOT NULL,
+    key_prefix VARCHAR(16) NOT NULL,
+    key_hash VARCHAR(128) NOT NULL,
+    scopes VARCHAR(255) NOT NULL DEFAULT 'paper:write',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP WITH TIME ZONE
+);
+
 -- Indexes for better query performance
 CREATE INDEX idx_trades_account_id ON trades(account_id);
 CREATE INDEX idx_trades_symbol ON trades(symbol);
@@ -94,3 +110,6 @@ CREATE INDEX idx_market_data_symbol ON market_data(symbol);
 CREATE INDEX idx_market_data_timestamp ON market_data(timestamp);
 CREATE INDEX idx_portfolio_snapshots_account_id ON portfolio_snapshots(account_id);
 CREATE INDEX idx_portfolio_snapshots_timestamp ON portfolio_snapshots(timestamp);
+CREATE INDEX idx_api_keys_key_hash ON api_keys(key_hash);
+CREATE UNIQUE INDEX uq_orders_client_id ON orders(api_key_id, client_order_id)
+    WHERE client_order_id IS NOT NULL;
