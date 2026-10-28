@@ -83,6 +83,12 @@ async def create_account(
     return new_account
 
 
+@router.get("/accounts", response_model=List[AccountResponse])
+async def list_accounts(db: Session = Depends(get_db)):
+    """List all paper trading accounts (single-user: usually one)."""
+    return db.query(PaperTradingAccount).order_by(PaperTradingAccount.id).all()
+
+
 @router.get("/accounts/{account_id}", response_model=AccountResponse)
 async def get_account(account_id: int, db: Session = Depends(get_db)):
     """Get account details"""
