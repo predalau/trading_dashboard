@@ -35,6 +35,16 @@ Keep the FastAPI + Vue + Postgres core; add four backend subsystems behind clean
 
 ## Decisions needed before building (gate Phases 4 and 6)
 
+RESOLVED 2026-10-28:
+1. Solana signing: **non-custodial** (browser/Phantom signs manual trades) **+ opt-in, capped, encrypted bot hot wallet** for unattended bots.
+2. Real venues: **Solana (Jupiter) only** for real; everything else stays paper. No real Binance orders.
+3. Strategy representation: **Python strategy classes** (`Strategy` base in `backend/strategies/`, authored by the MCP).
+4. Live bots: **on-demand / cron-triggered** calls for now; no in-process scheduler yet (YAGNI).
+5. Bot hot wallet guardrails: **$10/day USD cap**; **token allowlist** enforced in code — allowlist starts EMPTY (so the bot wallet can trade nothing until the operator populates it; empty = deny-all).
+6. MCP server: **local/stdio, operator-only** (not publicly exposed); talks to backend over `127.0.0.1:8001` with a dedicated API key.
+
+Original options (for reference):
+
 These have recommended defaults baked into the plan; confirm or override before the gated phase starts.
 
 1. **Solana signing model (gates Phase 4).** Recommended: non-custodial — the browser (Phantom/Solflare) builds+signs Jupiter swap transactions; the backend only prepares unsigned transactions and tracks results. Bots that must run unattended use a **separate, sparsely funded** hot wallet whose key is encrypted at rest (Fernet) and gated by per-day USD caps + token allowlist. Alternative: fully custodial server key (simpler bot UX, much higher risk). **Open: which, and what daily cap / token allowlist for the bot wallet?**
