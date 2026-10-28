@@ -182,3 +182,28 @@ class Backtest(Base):
     equity_curve = Column(JSON, nullable=True)
     error = Column(String(1000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BotHotWallet(Base):
+    """Opt-in encrypted hot wallet for unattended bots. DISABLED by default.
+
+    Guardrails (enforced in hotwallet_service): enabled flag, per-day USD cap,
+    and a token allowlist that starts EMPTY = deny-all.
+    """
+    __tablename__ = "bot_hot_wallet"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pubkey = Column(String(64), nullable=True)
+    encrypted_secret = Column(String(512), nullable=True)   # Fernet ciphertext of the secret key
+    enabled = Column(Boolean, nullable=False, default=False)
+    max_usd_per_day = Column(Float, nullable=False, default=10.0)
+    token_allowlist = Column(JSON, default=list)            # [] => deny-all
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BotWalletSpend(Base):
+    __tablename__ = "bot_wallet_spend"
+
+    id = Column(Integer, primary_key=True, index=True)
+    day = Column(String(10), unique=True, nullable=False, index=True)  # YYYY-MM-DD (UTC)
+    usd_spent = Column(Float, nullable=False, default=0.0)
