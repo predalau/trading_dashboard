@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum as SQLEnum
+from sqlalchemy import Column, Integer, BigInteger, String, Float, DateTime, Boolean, JSON, UniqueConstraint, Enum as SQLEnum
 from sqlalchemy.sql import func
 from app.database import Base
 from enum import Enum
@@ -135,4 +135,50 @@ class Wallet(Base):
     address = Column(String(64), nullable=False)
     label = Column(String(100), nullable=True)
     is_watch_only = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class OHLCV(Base):
+    __tablename__ = "ohlcv"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    timeframe = Column(String(10), nullable=False, index=True)
+    ts = Column(BigInteger, nullable=False, index=True)  # bar open time, ms since epoch
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, nullable=False)
+
+    __table_args__ = (UniqueConstraint("symbol", "timeframe", "ts", name="uq_ohlcv_bar"),)
+
+
+class StrategyDef(Base):
+    """A registered trading strategy (Python module in backend/strategies/)."""
+    __tablename__ = "strategies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+    name = Column(String(150), nullable=False)
+    module = Column(String(150), nullable=False)  # e.g. strategies.sma_cross
+    params = Column(JSON, default=dict)
+    description = Column(String(1000), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Backtest(Base):
+    __tablename__ = "backtests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    strategy_id = Column(Integer, nullable=True, index=True)
+    symbol = Column(String(50), nullable=False)
+    timeframe = Column(String(10), nullable=False)
+    start_ts = Column(BigInteger, nullable=True)
+    end_ts = Column(BigInteger, nullable=True)
+    params = Column(JSON, default=dict)
+    status = Column(String(20), default="pending")  # pending | done | error
+    metrics = Column(JSON, nullable=True)
+    equity_curve = Column(JSON, nullable=True)
+    error = Column(String(1000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
