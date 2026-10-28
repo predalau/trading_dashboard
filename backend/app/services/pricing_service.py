@@ -9,8 +9,9 @@ from typing import Iterable, Optional
 
 import httpx
 
-JUPITER_PRICE_URL = os.getenv("JUPITER_PRICE_URL", "https://api.jup.ag/price/v2")
+JUPITER_PRICE_URL = os.getenv("JUPITER_PRICE_URL", "https://lite-api.jup.ag/price/v3")
 _TTL_SEC = 60.0
+_BATCH = 50  # Jupiter caps ids per call; also keeps the query string under URL limits
 _CACHE: dict[str, tuple[float, float]] = {}  # mint -> (fetched_at, price)
 
 
@@ -36,17 +37,25 @@ class PricingService:
         now = time.time()
         result: dict[str, float] = {}
         missing: list[str] = []
-        for mint in set(mints):
+        seen: set[str] = set()
+        for mint in mints:  # preserve caller order (e.g. SOL first) across batches
+            if mint in seen:
+                continue
+            seen.add(mint)
             cached = _CACHE.get(mint)
             if cached and now - cached[0] < _TTL_SEC:
                 result[mint] = cached[1]
             else:
                 missing.append(mint)
         if missing:
-            data = (await self._fetch(missing)).get("data", {}) or {}
-            for mint in missing:
-                entry = data.get(mint)
-                price = float(entry["price"]) if entry and entry.get("price") else 0.0
-                _CACHE[mint] = (now, price)
-                result[mint] = price
+            for i in range(0, len(missing), _BATCH):
+                batch = missing[i:i + _BATCH]
+                # Jupiter Price v3 returns {mint: {"usdPrice": <float>, ...}}.
+                data = await self._fetch(batch) or {}
+                for mint in batch:
+                    entry = data.get(mint)
+                    usd = entry.get("usdPrice") if entry else None
+                    price = float(usd) if usd is not None else 0.0
+                    _CACHE[mint] = (now, price)
+                    result[mint] = price
         return result

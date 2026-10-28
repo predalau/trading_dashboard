@@ -63,31 +63,32 @@ async def build_summary(
             continue
         try:
             bal = await solana.get_wallet_balances(w.address)
+            mints = [SOL_MINT] + [tk["mint"] for tk in bal["tokens"]]
+            prices = await pricing.get_prices(mints)
+            sol_price = prices.get(SOL_MINT, 0.0)
+            wallet_value = bal["sol"] * sol_price
+            tokens_out = []
+            for tk in bal["tokens"]:
+                price = prices.get(tk["mint"], 0.0)
+                value = tk["amount"] * price
+                wallet_value += value
+                if value >= 0.01:  # hide dust / unpriced tokens from the UI
+                    tokens_out.append({
+                        "mint": tk["mint"], "amount": tk["amount"],
+                        "price_usd": price, "value_usd": value,
+                    })
+            tokens_out.sort(key=lambda x: x["value_usd"], reverse=True)
+            wallets_total += wallet_value
+            wallets_out.append({
+                "id": w.id, "address": w.address, "label": w.label,
+                "sol": bal["sol"], "sol_price_usd": sol_price,
+                "value_usd": wallet_value, "tokens": tokens_out,
+            })
         except Exception:
             wallets_out.append({
                 "id": w.id, "address": w.address, "label": w.label,
                 "error": "fetch_failed", "value_usd": 0.0, "sol": 0.0, "tokens": [],
             })
-            continue
-        mints = [SOL_MINT] + [tk["mint"] for tk in bal["tokens"]]
-        prices = await pricing.get_prices(mints)
-        sol_price = prices.get(SOL_MINT, 0.0)
-        wallet_value = bal["sol"] * sol_price
-        tokens_out = []
-        for tk in bal["tokens"]:
-            price = prices.get(tk["mint"], 0.0)
-            value = tk["amount"] * price
-            wallet_value += value
-            tokens_out.append({
-                "mint": tk["mint"], "amount": tk["amount"],
-                "price_usd": price, "value_usd": value,
-            })
-        wallets_total += wallet_value
-        wallets_out.append({
-            "id": w.id, "address": w.address, "label": w.label,
-            "sol": bal["sol"], "sol_price_usd": sol_price,
-            "value_usd": wallet_value, "tokens": tokens_out,
-        })
 
     return {
         "paper": {
