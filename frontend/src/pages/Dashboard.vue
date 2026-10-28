@@ -1,5 +1,6 @@
 <template>
   <div class="flex flex-col gap-5">
+    <SwapWidget />
     <!-- Charts Section -->
     <div class="flex flex-wrap gap-5">
       <TermPanel flush class="chart-panel">
@@ -235,6 +236,7 @@
 import { ref, reactive, computed, inject, watch, onMounted, onUnmounted } from 'vue'
 import ChartComponent from '../components/ChartComponent.vue'
 import TermPanel from '../components/term/TermPanel.vue'
+import SwapWidget from '../components/term/SwapWidget.vue'
 import SysLog from '../components/term/SysLog.vue'
 import { useLogStore } from '../stores/log'
 import binanceWS from '../services/websocket'

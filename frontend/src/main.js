@@ -1,5 +1,9 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+// Polyfills required by @solana/web3.js in the browser
+import { Buffer } from 'buffer'
+if (!window.Buffer) window.Buffer = Buffer
+if (!window.global) window.global = window
 import App from './App.vue'
 import router from './router'
 import '@fontsource/jetbrains-mono/400.css'

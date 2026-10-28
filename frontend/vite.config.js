@@ -5,6 +5,12 @@ import path from 'path'
 export default defineConfig({
   base: '/trading/',
   plugins: [vue()],
+  define: {
+    global: 'globalThis',
+  },
+  optimizeDeps: {
+    include: ['@solana/web3.js', 'buffer'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
