@@ -102,6 +102,17 @@ CREATE TABLE IF NOT EXISTS api_keys (
     last_used_at TIMESTAMP WITH TIME ZONE
 );
 
+-- Watch-only (and later hot) wallets
+CREATE TABLE IF NOT EXISTS wallets (
+    id SERIAL PRIMARY KEY,
+    chain VARCHAR(20) NOT NULL DEFAULT 'solana',
+    address VARCHAR(64) NOT NULL,
+    label VARCHAR(100),
+    is_watch_only BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (chain, address)
+);
+
 -- Indexes for better query performance
 CREATE INDEX idx_trades_account_id ON trades(account_id);
 CREATE INDEX idx_trades_symbol ON trades(symbol);

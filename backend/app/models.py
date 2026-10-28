@@ -125,3 +125,14 @@ class ApiKey(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class Wallet(Base):
+    __tablename__ = "wallets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chain = Column(String(20), nullable=False, default="solana")
+    address = Column(String(64), nullable=False)
+    label = Column(String(100), nullable=True)
+    is_watch_only = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
