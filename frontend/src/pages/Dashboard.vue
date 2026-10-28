@@ -166,51 +166,68 @@
     </div>
 
     <!-- Active Trades -->
-    <div v-if="openTrades.length > 0" class="chart-container">
-      <h2 class="text-xl font-semibold mb-4">Active Trades</h2>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="border-b border-dark-700">
+    <TermPanel title="ps --positions" tone="surface" flush>
+      <template #meta>
+        <span>{{ openTrades.length }} running</span>
+        <span v-if="openTrades.length > 0">
+          unrealized
+          <span class="font-bold" :class="totalUnrealized >= 0 ? 'text-up' : 'text-down'">
+            {{ totalUnrealized >= 0 ? '+' : '' }}{{ totalUnrealized.toFixed(2) }} USDT
+          </span>
+        </span>
+      </template>
+      <div v-if="openTrades.length === 0" class="px-3.5 py-4 text-muted">
+        no running positions on {{ selectedLabel }}
+      </div>
+      <div v-else class="overflow-x-auto">
+        <table class="t-table">
+          <thead>
             <tr>
-              <th class="text-left py-2 text-dark-400">Symbol</th>
-              <th class="text-left py-2 text-dark-400">Side</th>
-              <th class="text-left py-2 text-dark-400">Entry</th>
-              <th class="text-left py-2 text-dark-400">Current</th>
-              <th class="text-left py-2 text-dark-400">SL</th>
-              <th class="text-left py-2 text-dark-400">TP</th>
-              <th class="text-left py-2 text-dark-400">Qty</th>
-              <th class="text-left py-2 text-dark-400">P&L</th>
-              <th class="text-left py-2 text-dark-400">R</th>
-              <th class="text-left py-2 text-dark-400"></th>
+              <th>PID</th>
+              <th>Symbol</th>
+              <th>Side</th>
+              <th>Entry</th>
+              <th>Mark</th>
+              <th>SL</th>
+              <th>TP</th>
+              <th>Qty</th>
+              <th>P&amp;L</th>
+              <th>R</th>
+              <th><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="trade in openTrades" :key="trade.id" class="border-b border-dark-800 hover:bg-dark-800 transition">
-              <td class="py-3">{{ trade.symbol }}</td>
-              <td class="py-3" :class="trade.trade_type === 'BUY' ? 'text-positive' : 'text-negative'">
-                {{ trade.trade_type }}
+            <tr v-for="trade in openTrades" :key="trade.id">
+              <td class="text-muted">{{ formatPid(trade.id) }}</td>
+              <td>{{ trade.symbol }}</td>
+              <td :class="trade.trade_type === 'BUY' ? 'text-up' : 'text-down'">
+                {{ trade.trade_type === 'BUY' ? 'LONG' : 'SHORT' }}
               </td>
-              <td class="py-3">${{ trade.entry_price.toFixed(2) }}</td>
-              <td class="py-3">
-                {{ currentPrices[trade.symbol] ? '$' + currentPrices[trade.symbol].toFixed(2) : '-' }}
+              <td>{{ formatPrice(trade.entry_price) }}</td>
+              <td>{{ currentPrices[trade.symbol] ? formatPrice(currentPrices[trade.symbol]) : '--' }}</td>
+              <td class="text-down">{{ trade.stop_loss ? formatPrice(trade.stop_loss) : '--' }}</td>
+              <td class="text-tp">{{ trade.take_profit ? formatPrice(trade.take_profit) : '--' }}</td>
+              <td>{{ trade.quantity }}</td>
+              <td class="font-bold" :class="getTradePnL(trade) >= 0 ? 'text-up' : 'text-down'">
+                {{ currentPrices[trade.symbol] ? (getTradePnL(trade) >= 0 ? '+' : '') + getTradePnL(trade).toFixed(2) : '--' }}
               </td>
-              <td class="py-3 text-red-400">{{ trade.stop_loss ? '$' + trade.stop_loss.toFixed(2) : '-' }}</td>
-              <td class="py-3 text-green-400">{{ trade.take_profit ? '$' + trade.take_profit.toFixed(2) : '-' }}</td>
-              <td class="py-3">{{ trade.quantity }}</td>
-              <td class="py-3 font-semibold" :class="getTradePnL(trade) >= 0 ? 'text-positive' : 'text-negative'">
-                {{ currentPrices[trade.symbol] ? (getTradePnL(trade) >= 0 ? '+' : '') + '$' + getTradePnL(trade).toFixed(2) : '-' }}
-              </td>
-              <td class="py-3 font-semibold text-secondary-400">
-                {{ formatR(trade) }}
-              </td>
-              <td class="py-3">
-                <button @click="closeTrade(trade.id)" class="text-red-400 hover:text-red-300 text-xs">Close</button>
+              <td>{{ formatR(trade) }}</td>
+              <td>
+                <button
+                  v-if="confirmKill !== trade.id"
+                  @click="confirmKill = trade.id"
+                  class="t-btn-danger"
+                >kill -9</button>
+                <span v-else class="inline-flex gap-1.5">
+                  <button @click="confirmKill = null; closeTrade(trade.id)" class="t-btn-danger">confirm</button>
+                  <button @click="confirmKill = null" class="t-btn-ghost px-2.5 py-1.5">esc</button>
+                </span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-    </div>
+    </TermPanel>
   </div>
 </template>
 
@@ -276,6 +293,10 @@ const hitLabel = (trade, price) => {
   const hitSl = trade.stop_loss && (isBuy ? price <= trade.stop_loss : price >= trade.stop_loss)
   return hitSl ? 'SL' : 'TP'
 }
+
+const confirmKill = ref(null)
+
+const totalUnrealized = computed(() => openTrades.value.reduce((sum, t) => sum + getTradePnL(t), 0))
 
 const RR_CELLS = 20
 const rrBar = computed(() => {
