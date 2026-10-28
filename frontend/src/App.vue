@@ -8,6 +8,8 @@
       <router-view />
     </main>
 
+    <StatusBar :items="navItems" />
+
     <!-- Mobile bottom tab bar -->
     <nav class="mobile-tab-bar">
       <router-link
@@ -26,6 +28,7 @@ import { useRoute } from 'vue-router'
 import { ref, provide } from 'vue'
 import TermHeader from './components/term/TermHeader.vue'
 import TermNav from './components/term/TermNav.vue'
+import StatusBar from './components/term/StatusBar.vue'
 
 const route = useRoute()
 
