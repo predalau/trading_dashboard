@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.models import Trade, TradeType
+from app.models import Trade, TradeType, PaperTradingAccount
 
 router = APIRouter()
 
@@ -20,6 +21,19 @@ def realized_pl(trade_type, entry: float, exit_price: float, quantity: float):
     pl = direction * (exit_price - entry) * quantity
     pct = (pl / (entry * quantity) * 100) if entry and quantity else 0.0
     return pl, pct
+
+
+def recompute_current_balance(db: Session, account: PaperTradingAccount) -> None:
+    """current_balance = free cash + margin reserved by still-open positions.
+
+    Opening a position moves notional from available into reserved (equity flat);
+    closing returns the margin +/- realized P&L (equity changes by P&L).
+    """
+    reserved = db.query(
+        func.coalesce(func.sum(Trade.entry_price * Trade.quantity), 0.0)
+    ).filter(Trade.account_id == account.id, Trade.is_open.is_(True)).scalar() or 0.0
+    account.current_balance = account.available_balance + reserved
+
 
 
 
@@ -101,6 +115,10 @@ async def create_trade(trade: TradeCreate, db: Session = Depends(get_db)):
     from app.services.account_service import get_or_create_default_account
     account = get_or_create_default_account(db)
 
+    cost = trade.entry_price * trade.quantity
+    if cost > account.available_balance:
+        raise HTTPException(status_code=400, detail="Insufficient balance for this trade")
+
     new_trade = Trade(
         account_id=account.id,
         symbol=trade.symbol,
@@ -114,7 +132,10 @@ async def create_trade(trade: TradeCreate, db: Session = Depends(get_db)):
         is_open=True,
     )
 
+    account.available_balance -= cost
     db.add(new_trade)
+    db.flush()  # assign id + include this trade in the reserved-margin sum
+    recompute_current_balance(db, account)
     db.commit()
     db.refresh(new_trade)
 
@@ -174,6 +195,15 @@ async def close_trade(trade_id: int, body: Optional[TradeClose] = None, db: Sess
         trade.profit_loss, trade.profit_loss_percentage = realized_pl(
             trade.trade_type, trade.entry_price, body.exit_price, trade.quantity
         )
+
+    # Return reserved margin to free cash, plus any realized P&L.
+    account = db.query(PaperTradingAccount).filter(
+        PaperTradingAccount.id == trade.account_id
+    ).first()
+    if account:
+        account.available_balance += (trade.entry_price * trade.quantity) + (trade.profit_loss or 0.0)
+        db.flush()
+        recompute_current_balance(db, account)
 
     db.commit()
 
