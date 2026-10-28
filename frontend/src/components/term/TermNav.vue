@@ -51,6 +51,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   border-bottom: 1px solid var(--line);
 }
 
+/* Phones use the bottom tab bar instead */
+@media (max-width: 767px) {
+  .term-nav {
+    display: none;
+  }
+}
+
 .term-tab {
   padding: 10px 16px;
   color: var(--muted);

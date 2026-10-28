@@ -2,7 +2,7 @@
   <div class="min-h-screen flex flex-col bg-term-bg text-term-text pb-20 md:pb-0">
     <TermHeader />
 
-    <TermNav :items="navItems" class="hidden md:flex" />
+    <TermNav :items="navItems" />
 
     <main class="w-full max-w-[1440px] mx-auto px-4 md:px-7 py-6 flex-1">
       <router-view />
@@ -11,14 +11,15 @@
     <StatusBar :items="navItems" />
 
     <!-- Mobile bottom tab bar -->
-    <nav class="mobile-tab-bar">
+    <nav class="mobile-tab-bar" aria-label="Main">
       <router-link
-        v-for="item in navItems"
+        v-for="(item, i) in navItems"
         :key="item.to"
         :to="item.to"
         class="mobile-tab"
         :class="{ 'mobile-tab-active': isActive(item.to) }"
-      >{{ item.label }}</router-link>
+        :aria-current="isActive(item.to) ? 'page' : undefined"
+      >{{ i }} {{ item.label }}</router-link>
     </nav>
   </div>
 </template>
@@ -56,6 +57,7 @@ const isActive = (path) => {
   right: 0;
   z-index: 50;
   display: flex;
+  padding-bottom: env(safe-area-inset-bottom, 0);
   background: var(--surface);
   border-top: 1px solid var(--line);
 }
@@ -68,8 +70,11 @@ const isActive = (path) => {
 
 .mobile-tab {
   flex: 1;
-  padding: 14px 0;
-  text-align: center;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
   color: var(--muted);
   text-decoration: none;
 }
