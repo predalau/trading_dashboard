@@ -43,6 +43,20 @@ app.include_router(user.router, prefix="/api/v1/user", tags=["User"])
 app.include_router(trades.router, prefix="/api/v1", tags=["Trades"])
 
 
+from app.database import SessionLocal
+from app.services.account_service import get_or_create_default_account
+
+
+@app.on_event("startup")
+def _bootstrap_default_account():
+    """Ensure the default operator user + paper account exist on boot."""
+    db = SessionLocal()
+    try:
+        get_or_create_default_account(db)
+    finally:
+        db.close()
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
