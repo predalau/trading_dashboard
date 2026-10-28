@@ -161,6 +161,7 @@
             >$ ./execute --{{ isRealTrading ? 'real' : 'paper' }} ⏎</button>
           </form>
         </TermPanel>
+        <SysLog class="flex-1" />
       </div>
     </div>
 
@@ -217,6 +218,8 @@
 import { ref, reactive, computed, inject, watch, onMounted, onUnmounted } from 'vue'
 import ChartComponent from '../components/ChartComponent.vue'
 import TermPanel from '../components/term/TermPanel.vue'
+import SysLog from '../components/term/SysLog.vue'
+import { useLogStore } from '../stores/log'
 import binanceWS from '../services/websocket'
 
 const STORAGE_KEY = 'trading_custom_pairs'
@@ -265,6 +268,15 @@ const riskReward = computed(() => {
   return { risk, reward, rr: reward / risk }
 })
 
+// Short hex id shown as the position "PID"
+const formatPid = (id) => '0x' + Number(id).toString(16)
+
+const hitLabel = (trade, price) => {
+  const isBuy = trade.trade_type === 'BUY'
+  const hitSl = trade.stop_loss && (isBuy ? price <= trade.stop_loss : price >= trade.stop_loss)
+  return hitSl ? 'SL' : 'TP'
+}
+
 const RR_CELLS = 20
 const rrBar = computed(() => {
   const filled = riskReward.value ? Math.round(Math.min(riskReward.value.rr, 3) / 3 * RR_CELLS) : 0
@@ -272,6 +284,7 @@ const rrBar = computed(() => {
 })
 
 const isRealTrading = inject('isRealTrading')
+const log = useLogStore()
 
 const timeframes = [
   { label: '1h', value: '1h' },
@@ -421,6 +434,7 @@ const handleTradeTickerUpdate = (tickerData) => {
 
     if (shouldClose) {
       closingTrades.add(trade.id)
+      log.push('WARN', `${trade.symbol} hit ${hitLabel(trade, price)} @ ${price}`)
       closeTrade(trade.id, price)
     }
   }
@@ -486,10 +500,17 @@ const submitTrade = async () => {
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
+    const f = tradeForm.value
+    log.push('FILL', `${f.trade_type === 'BUY' ? 'LONG' : 'SHORT'} ${f.quantity} ${selectedSymbol.value} @ ${f.entry_price}`)
+    if (f.stop_loss || f.take_profit) {
+      log.push('SET', `TP ${f.take_profit || '--'} · SL ${f.stop_loss || '--'}`)
+    }
+
     // Reset form and refresh trades
     tradeForm.value = { trade_type: 'BUY', entry_price: null, stop_loss: null, take_profit: null, quantity: null }
     await fetchTrades()
   } catch (err) {
+    log.push('ERR', `order rejected: ${err.message}`)
     console.error('Failed to create trade:', err)
   }
 }
@@ -507,9 +528,11 @@ const closeTrade = async (tradeId, exitPrice = null) => {
     const response = await fetch(`/trading/api/v1/trades/${tradeId}`, options)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     closingTrades.delete(tradeId)
+    log.push('FILL', `closed position ${formatPid(tradeId)}${exitPrice !== null ? ' @ ' + exitPrice : ''}`)
     await fetchTrades()
   } catch (err) {
     closingTrades.delete(tradeId)
+    log.push('ERR', `close ${formatPid(tradeId)} failed: ${err.message}`)
     console.error('Failed to close trade:', err)
   }
 }
@@ -525,6 +548,7 @@ const handleChartClick = ({ mode, price }) => {
   if (mode === 'entry') tradeForm.value.entry_price = price
   else if (mode === 'sl') tradeForm.value.stop_loss = price
   else if (mode === 'tp') tradeForm.value.take_profit = price
+  log.push('SET', `${mode} = ${price}`)
   clickMode.value = null
 }
 
