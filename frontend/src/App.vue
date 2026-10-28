@@ -2,15 +2,7 @@
   <div class="min-h-screen flex flex-col bg-term-bg text-term-text pb-20 md:pb-0">
     <TermHeader />
 
-    <nav class="hidden md:flex gap-2 px-7 py-2 border-b border-term-line">
-      <router-link
-        v-for="item in navItems"
-        :key="item.to"
-        :to="item.to"
-        class="t-btn-ghost"
-        :class="{ 'is-active': isActive(item.to) }"
-      >{{ item.label }}</router-link>
-    </nav>
+    <TermNav :items="navItems" class="hidden md:flex" />
 
     <main class="w-full max-w-[1440px] mx-auto px-4 md:px-7 py-6 flex-1">
       <router-view />
@@ -33,6 +25,7 @@
 import { useRoute } from 'vue-router'
 import { ref, provide } from 'vue'
 import TermHeader from './components/term/TermHeader.vue'
+import TermNav from './components/term/TermNav.vue'
 
 const route = useRoute()
 
