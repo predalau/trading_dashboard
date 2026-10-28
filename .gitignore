@@ -66,3 +66,4 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+backend/mcp/.venv/
