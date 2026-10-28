@@ -13,10 +13,20 @@ from sqlalchemy.orm import Session
 from app.backtest.engine import run as run_engine
 from app.backtest.registry import load_strategy
 from app.database import get_db
-from app.models import Backtest, StrategyDef
+from app.deps.auth import get_api_key, require_scope
+from app.models import ApiKey, Backtest, StrategyDef
 from app.services.ohlcv_service import INTERVAL_MS, backfill, get_ohlcv
+from app.services.strategy_authoring import StrategyValidationError, create_strategy
 
 router = APIRouter()
+
+
+class StrategyCreate(BaseModel):
+    slug: str
+    name: str
+    source: str
+    params: dict = {}
+    description: Optional[str] = None
 
 
 class RunRequest(BaseModel):
@@ -42,6 +52,19 @@ def list_strategies(db: Session = Depends(get_db)):
     rows = db.query(StrategyDef).order_by(StrategyDef.id.desc()).all()
     return [{"id": s.id, "slug": s.slug, "name": s.name, "module": s.module,
              "params": s.params, "description": s.description} for s in rows]
+
+
+@router.post("/strategies")
+def author_strategy(body: StrategyCreate, key: ApiKey = Depends(get_api_key),
+                    db: Session = Depends(get_db)):
+    """Create/update a Python strategy (AST-validated). Requires 'strategy:write'."""
+    require_scope(key, "strategy:write")
+    try:
+        row = create_strategy(db, slug=body.slug, name=body.name, source=body.source,
+                              params=body.params, description=body.description)
+    except StrategyValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"id": row.id, "slug": row.slug, "module": row.module, "name": row.name}
 
 
 @router.post("/run")
