@@ -1,92 +1,102 @@
 <template>
-  <div class="space-y-8 animate-fade-in">
+  <div class="flex flex-col gap-5">
     <!-- Charts Section -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 chart-container border-purple-700">
-        <div class="flex justify-between items-center mb-4">
+    <div class="flex flex-wrap gap-5">
+      <TermPanel flush class="chart-panel">
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2.5 px-3.5 py-2.5 border-b border-term-line">
           <!-- Ticker Dropdown -->
-          <div class="relative">
+          <div class="relative flex items-center">
+            <span class="text-muted" aria-hidden="true">╔═[</span>
             <button
               @click="dropdownOpen = !dropdownOpen"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-800 border border-purple-700 hover:border-purple-500 transition text-purple-300 font-semibold text-lg"
-            >
-              <span>{{ selectedLabel }}</span>
-              <svg class="w-4 h-4 transition-transform" :class="{ 'rotate-180': dropdownOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+              class="px-1 py-1.5 font-bold text-[15px] text-term-text hover:text-accent"
+              :aria-expanded="dropdownOpen"
+              aria-haspopup="listbox"
+            >{{ selectedLabel }} {{ dropdownOpen ? '▴' : '▾' }}</button>
+            <span class="text-muted" aria-hidden="true">]═</span>
 
             <!-- Dropdown Menu -->
             <div
               v-if="dropdownOpen"
-              class="absolute top-full left-0 mt-1 w-56 bg-dark-800 border border-purple-700 rounded-lg shadow-xl z-50 overflow-hidden"
+              class="absolute top-full left-0 mt-1 w-60 bg-term-surface border border-term-line z-50"
             >
-              <div class="max-h-64 overflow-y-auto">
-                <button
+              <div class="max-h-64 overflow-y-auto" role="listbox">
+                <div
                   v-for="pair in allPairs"
                   :key="pair.symbol"
-                  @click="selectPair(pair.symbol)"
-                  class="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-purple-900 hover:bg-opacity-30 transition"
-                  :class="pair.symbol === selectedSymbol ? 'text-purple-300 bg-purple-900 bg-opacity-20' : 'text-dark-300'"
+                  class="flex items-center"
+                  :class="pair.symbol === selectedSymbol ? 'bg-term-accent text-term-on-accent font-bold' : 'text-muted hover:text-term-text'"
                 >
-                  <span>{{ pair.label }}</span>
+                  <button
+                    @click="selectPair(pair.symbol)"
+                    class="flex-1 px-3.5 py-2.5 text-left"
+                    role="option"
+                    :aria-selected="pair.symbol === selectedSymbol"
+                  >{{ pair.symbol === selectedSymbol ? '> ' : '  ' }}{{ pair.label }}</button>
                   <button
                     v-if="isCustomPair(pair.symbol)"
                     @click.stop="removeCustomPair(pair.symbol)"
-                    class="text-dark-500 hover:text-red-400 transition text-xs ml-2"
-                    title="Remove pair"
-                  >
-                    ✕
-                  </button>
-                </button>
+                    class="px-3 py-2.5 text-xs hover:text-down"
+                    :aria-label="'Remove ' + pair.label"
+                  >rm</button>
+                </div>
               </div>
 
               <!-- Add Custom Pair -->
-              <div class="border-t border-dark-700 p-2">
+              <div class="border-t border-term-line p-2">
                 <div v-if="showAddPair" class="flex gap-1">
+                  <label class="sr-only" for="new-pair">New pair symbol</label>
                   <input
+                    id="new-pair"
                     v-model="newPairInput"
                     @keyup.enter="addCustomPair"
                     placeholder="e.g. DOGE"
-                    class="flex-1 px-2 py-1.5 bg-dark-900 border border-dark-600 rounded text-sm text-white placeholder-dark-500 focus:border-secondary-500 focus:outline-none"
+                    class="t-input flex-1"
                     autofocus
                   />
-                  <button @click="addCustomPair" class="btn btn-primary text-xs px-2 py-1.5">Add</button>
+                  <button @click="addCustomPair" class="t-btn px-2.5 py-1.5">add</button>
                 </div>
                 <button
                   v-else
                   @click="showAddPair = true"
-                  class="w-full text-left px-2 py-1.5 text-sm text-purple-400 hover:text-purple-300 transition"
-                >
-                  + Add pair
-                </button>
+                  class="w-full text-left px-2 py-1.5 text-accent hover:text-term-text"
+                >+ add pair</button>
               </div>
             </div>
           </div>
 
+          <template v-if="symbolTicker">
+            <span class="text-[22px] font-extrabold glow" :class="symbolTicker.change >= 0 ? 'text-up' : 'text-down'">
+              {{ formatPrice(symbolTicker.price) }}
+            </span>
+            <span :class="symbolTicker.change >= 0 ? 'text-up' : 'text-down'">
+              {{ symbolTicker.change >= 0 ? '+' : '' }}{{ formatPrice(symbolTicker.priceChange) }}
+              ({{ symbolTicker.change >= 0 ? '+' : '' }}{{ symbolTicker.change.toFixed(2) }}%)
+            </span>
+          </template>
+
           <!-- Timeframe Buttons -->
-          <div class="flex gap-2">
+          <div class="flex gap-0.5 ml-auto" role="group" aria-label="Timeframe">
             <button
               v-for="tf in timeframes"
               :key="tf.value"
               @click="selectedTimeframe = tf.value"
-              :class="[
-                'btn text-sm',
-                selectedTimeframe === tf.value ? 'btn-primary' : 'btn-secondary'
-              ]"
-            >
-              {{ tf.label }}
-            </button>
+              class="px-2.5 py-2 border"
+              :class="selectedTimeframe === tf.value ? 'border-term-accent text-accent' : 'border-transparent text-muted hover:text-term-text'"
+              :aria-pressed="selectedTimeframe === tf.value"
+            >{{ tf.label }}</button>
           </div>
         </div>
-        <ChartComponent
-          :symbol="selectedSymbol"
-          :interval="selectedTimeframe"
-          :trades="openTrades"
-          :clickMode="clickMode"
-          @chart-click="handleChartClick"
-        />
-      </div>
+        <div class="p-3.5">
+          <ChartComponent
+            :symbol="selectedSymbol"
+            :interval="selectedTimeframe"
+            :trades="openTrades"
+            :clickMode="clickMode"
+            @chart-click="handleChartClick"
+          />
+        </div>
+      </TermPanel>
 
       <!-- New Trade Form -->
       <div>
@@ -203,6 +213,7 @@
 <script setup>
 import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import ChartComponent from '../components/ChartComponent.vue'
+import TermPanel from '../components/term/TermPanel.vue'
 import binanceWS from '../services/websocket'
 
 const STORAGE_KEY = 'trading_custom_pairs'
@@ -235,11 +246,35 @@ const tradeForm = ref({
 })
 
 const timeframes = [
-  { label: '1H', value: '1h' },
-  { label: '4H', value: '4h' },
-  { label: '1D', value: '1d' },
-  { label: '1W', value: '1w' }
+  { label: '1h', value: '1h' },
+  { label: '4h', value: '4h' },
+  { label: '1d', value: '1d' },
+  { label: '1w', value: '1w' }
 ]
+
+// 24h ticker for the selected pair, shown in the chart header
+const symbolTicker = ref(null)
+let symbolTickerUnsub = null
+
+const subscribeSymbolTicker = async () => {
+  if (symbolTickerUnsub) symbolTickerUnsub()
+  symbolTicker.value = null
+  try {
+    await binanceWS.connect()
+  } catch (err) {
+    console.error('Failed to connect WebSocket:', err)
+    return
+  }
+  symbolTickerUnsub = binanceWS.subscribe(selectedSymbol.value, 'ticker', null, (data) => {
+    if (data.symbol !== selectedSymbol.value) return
+    symbolTicker.value = { price: data.price, priceChange: data.price_change, change: data.price_change_percent }
+  })
+}
+
+const formatPrice = (p) => p.toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: Math.abs(p) < 10 ? 4 : 2,
+})
 
 // Load custom pairs from localStorage
 const loadCustomPairs = () => {
@@ -467,6 +502,7 @@ const handleChartClick = ({ mode, price }) => {
 
 // Watch for symbol changes to update stats + ticker subscription + trades
 watch(selectedSymbol, async () => {
+  subscribeSymbolTicker()
   await fetchTrades()
 })
 
@@ -479,11 +515,19 @@ const closeDropdown = (e) => {
 
 onMounted(async () => {
   document.addEventListener('click', closeDropdown)
+  subscribeSymbolTicker()
   await fetchTrades()
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', closeDropdown)
   tradeTickerUnsubs.value.forEach(unsub => unsub())
+  if (symbolTickerUnsub) symbolTickerUnsub()
 })
 </script>
+
+<style scoped>
+.chart-panel {
+  flex: 999 1 640px;
+}
+</style>
