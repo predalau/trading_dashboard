@@ -41,6 +41,7 @@ const navItems = [
   { to: '/dashboard', label: 'dashboard' },
   { to: '/trades', label: 'trades' },
   { to: '/profile', label: 'profile' },
+  { to: '/backtest', label: 'backtest' },
 ]
 
 const isActive = (path) => {

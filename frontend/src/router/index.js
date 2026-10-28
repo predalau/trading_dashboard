@@ -3,6 +3,7 @@ import Home from '../pages/Home.vue'
 import Dashboard from '../pages/Dashboard.vue'
 import Trades from '../pages/Trades.vue'
 import Profile from '../pages/Profile.vue'
+import Backtest from '../pages/Backtest.vue'
 
 const routes = [
   {
@@ -24,6 +25,11 @@ const routes = [
     path: '/profile',
     name: 'Profile',
     component: Profile
+  },
+  {
+    path: '/backtest',
+    name: 'Backtest',
+    component: Backtest
   }
 ]
 
