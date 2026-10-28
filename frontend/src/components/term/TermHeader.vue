@@ -19,7 +19,7 @@
       >PAPER</button>
       <button
         type="button"
-        :class="isRealTrading ? 't-btn-real' : 't-btn-ghost'"
+        :class="isRealTrading ? 't-btn-short' : 't-btn-ghost'"
         :aria-pressed="isRealTrading"
         @click="setReal(true)"
       >REAL</button>
@@ -65,13 +65,6 @@ const setReal = (value) => { isRealTrading.value = value }
 
 .prompt {
   color: var(--muted);
-}
-
-.t-btn-real {
-  @apply inline-flex items-center justify-center px-3.5 py-2.5 font-extrabold cursor-pointer;
-  background: var(--down);
-  color: var(--on-accent);
-  border: 1px solid var(--down);
 }
 
 @media (max-width: 767px) {

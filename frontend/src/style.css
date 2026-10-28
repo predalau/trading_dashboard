@@ -159,6 +159,13 @@ body::after {
   color: var(--on-accent);
 }
 
+.t-btn-short {
+  @apply inline-flex items-center justify-center gap-2 px-3.5 py-2.5 font-extrabold cursor-pointer transition-colors;
+  background: var(--down);
+  color: var(--on-accent);
+  border: 1px solid var(--down);
+}
+
 /* Inputs */
 .t-input, input, select, textarea {
   font: inherit;
@@ -218,49 +225,3 @@ input[type='checkbox'], input[type='radio'] {
 .text-accent { color: var(--accent); }
 .glow { text-shadow: 0 0 10px var(--glow); }
 
-.text-positive { color: var(--up); }
-.text-negative { color: var(--down); }
-
-/* Legacy classes restyled until every page moves to the primitives above */
-.glass-effect, .card, .chart-container {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 14px;
-}
-
-.btn {
-  @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 cursor-pointer transition-colors;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
-}
-
-.btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-  font-weight: 800;
-}
-
-.btn-secondary:hover {
-  color: var(--text);
-}
-
-.btn-success {
-  background: var(--up);
-  border-color: var(--up);
-  color: var(--on-accent);
-  font-weight: 800;
-}
-
-.btn-danger {
-  background: transparent;
-  border-color: var(--down);
-  color: var(--down);
-  font-weight: 800;
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}

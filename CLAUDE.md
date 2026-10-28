@@ -79,7 +79,8 @@ PostgreSQL: SELECT * FROM paper_trading_accounts
 - **`src/components/ChartComponent.vue`** - TradingView Lightweight Charts integration
 - **`src/stores/trading.js`** - Pinia state management for trading data
 - **`src/api/client.js`** - Axios HTTP client configured for `/trading/api/v1` base URL
-- **`src/style.css`** - Global styles with custom glass-morphism effects (dark purple theme)
+- **`src/style.css`** - Terminal Ice design tokens (CSS variables) and shared `.t-*` primitives
+- **`src/components/term/`** - Terminal UI building blocks (TermPanel, header, nav, status bar, sys.log, history table)
 - **`vite.config.js`** - Critical: `base: '/trading/'` tells Vite to serve from `/trading/` path
 - **`tailwind.config.js`** - Color palette defined here (dark theme with purple accents)
 
@@ -136,11 +137,11 @@ PostgreSQL: SELECT * FROM paper_trading_accounts
 Example: `backend/app/api/paper_trading.py` shows the pattern.
 
 ### Update Color Scheme
-- **Tailwind colors**: Edit `frontend/tailwind.config.js` - `accent` section
-- **Custom CSS**: Edit `frontend/src/style.css` - look for `rgba()` color values in glass-effect, cards, buttons
-- **Component colors**: Search Vue files for `text-purple-*`, `border-purple-*`, `bg-purple-*` Tailwind classes
+- **Tokens**: Edit the CSS variables on `:root` in `frontend/src/style.css` (`--bg`, `--panel`, `--surface`, `--accent`, `--up`, `--down`, `--tp`, ...). Everything reads from them, including the chart (`ChartComponent.vue` reads them with `getComputedStyle`)
+- **Tailwind**: `term-*` colours in `frontend/tailwind.config.js` point at the same variables (`bg-term-surface`, `text-term-text`, `border-term-line`)
+- **Helpers**: `.text-up`, `.text-down`, `.text-tp`, `.text-muted`, `.text-accent`, `.glow`
 
-Current theme: Dark base with **purple/violet** accents (`#a78bfa` primary, `#7c3aed` secondary)
+Current theme: **Terminal Ice**. Near-black ground `#0c0f14`, panels `#151a22`, surfaces `#202d3d`, cyan accent `#4fd6ff`. Gains are cyan, losses orange `#ff8a5c`, take-profit lavender `#c7b8ff`. No green, no emoji, no gradients, square corners, JetBrains Mono everywhere.
 
 ### Fix Caddy Redirect Issues
 - **Always test with curl**: `docker exec caddy curl -v http://investhor_frontend:5173/path`
@@ -188,9 +189,10 @@ All API calls use this client, so requests automatically get `/trading/api/v1` p
 
 ### Styling System
 - **Tailwind**: Configured in `tailwind.config.js`, used for layout and responsive design
-- **Custom CSS**: `style.css` for complex effects (glass-morphism, card styling, animations)
-- **Color Palette**: Edit `tailwind.config.js` `extend.colors.accent` to change theme colors
-- **No JS Animations**: All animations are pure CSS (`@keyframes fadeIn`, `slideUp`) for performance
+- **Custom CSS**: `style.css` holds tokens, scanlines, the blinking `.cursor`, and primitives: `.t-btn`, `.t-btn-ghost`, `.t-btn-short`, `.t-btn-danger`, `.t-input`, `.t-table`
+- **Panels**: wrap content in `<TermPanel title="name">` for the `╔═[ name ]` header; `tone="surface"` for the lighter surface, `flush` to drop padding
+- **Copy**: CLI-style labels (`--entry`, `kill -9`, `cat history.log`)
+- **No JS Animations**: All animations are pure CSS and switch off under `prefers-reduced-motion`
 
 ---
 

@@ -608,11 +608,4 @@ onUnmounted(() => {
   flex: 1 1 320px;
   min-width: 0;
 }
-
-.t-btn-short {
-  @apply inline-flex items-center justify-center px-3.5 py-2.5 cursor-pointer;
-  background: var(--down);
-  color: var(--on-accent);
-  border: 1px solid var(--down);
-}
 </style>

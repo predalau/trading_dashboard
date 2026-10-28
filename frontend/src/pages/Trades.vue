@@ -338,11 +338,4 @@ onUnmounted(() => {
 .positions-column {
   flex: 999 1 560px;
 }
-
-.t-btn-short {
-  @apply inline-flex items-center justify-center px-3.5 py-2.5 cursor-pointer;
-  background: var(--down);
-  color: var(--on-accent);
-  border: 1px solid var(--down);
-}
 </style>
