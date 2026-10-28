@@ -1,19 +1,15 @@
 <template>
-  <div class="space-y-8 animate-fade-in">
-    <section class="space-y-4">
-      <h1 class="text-4xl font-bold text-purple-400">The Raid Hall</h1>
-      <p class="text-purple-400">Prepare your raids and study your glorious victories and honorable defeats</p>
-    </section>
+  <div class="flex flex-col gap-5">
+    <h1 class="sr-only">Trades</h1>
 
-    <!-- New Trade Form -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="chart-container border-purple-700">
-        <h2 class="text-xl font-semibold mb-4 text-purple-400">Plan Your Raid</h2>
-        <form @submit.prevent="submitTrade" class="space-y-4">
-          <div>
-            <label class="block text-sm text-dark-400 mb-2">Symbol</label>
-            <select v-model="form.symbol" class="w-full">
-              <option value="">Select Symbol</option>
+    <div class="flex flex-wrap gap-5">
+      <!-- New Trade Form -->
+      <TermPanel title="new_order.sh" tone="surface" class="order-column">
+        <form @submit.prevent="submitTrade" class="flex flex-col gap-3">
+          <div class="flex items-center gap-2.5">
+            <label for="trade-symbol" class="w-24 shrink-0 text-muted">--symbol</label>
+            <select id="trade-symbol" v-model="form.symbol" class="t-input flex-1">
+              <option value="">select</option>
               <option value="BTCUSDT">BTC/USDT</option>
               <option value="ETHUSDT">ETH/USDT</option>
               <option value="BNBUSDT">BNB/USDT</option>
@@ -22,192 +18,148 @@
             </select>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="flex gap-2" role="group" aria-label="Side">
             <button
               type="button"
               @click="form.trade_type = 'BUY'"
-              class="py-2 rounded-lg font-medium transition"
-              :class="form.trade_type === 'BUY' ? 'bg-green-600 text-white' : 'bg-dark-700 text-dark-400'"
-            >
-              Buy
-            </button>
+              class="flex-1"
+              :class="form.trade_type === 'BUY' ? 't-btn' : 't-btn-ghost'"
+              :aria-pressed="form.trade_type === 'BUY'"
+            >LONG</button>
             <button
               type="button"
               @click="form.trade_type = 'SELL'"
-              class="py-2 rounded-lg font-medium transition"
-              :class="form.trade_type === 'SELL' ? 'bg-red-600 text-white' : 'bg-dark-700 text-dark-400'"
-            >
-              Sell
-            </button>
+              class="flex-1 font-extrabold"
+              :class="form.trade_type === 'SELL' ? 't-btn-short' : 't-btn-ghost'"
+              :aria-pressed="form.trade_type === 'SELL'"
+            >SHORT</button>
           </div>
 
-          <div>
-            <label class="block text-sm text-dark-400 mb-2">Entry Price</label>
-            <input v-model.number="form.entry_price" type="number" placeholder="0.00" step="0.01" class="w-full" />
+          <div v-for="field in fields" :key="field.key" class="flex items-center gap-2.5">
+            <label :for="'trade-' + field.key" class="w-24 shrink-0 text-muted">{{ field.flag }}</label>
+            <input
+              :id="'trade-' + field.key"
+              v-model.number="form[field.key]"
+              type="number"
+              :step="field.step"
+              placeholder="0.00"
+              class="t-input flex-1"
+              :class="field.color"
+            />
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm text-dark-400 mb-2">Stop Loss</label>
-              <input v-model.number="form.stop_loss" type="number" placeholder="0.00" step="0.01" class="w-full" />
-            </div>
-            <div>
-              <label class="block text-sm text-dark-400 mb-2">Take Profit</label>
-              <input v-model.number="form.take_profit" type="number" placeholder="0.00" step="0.01" class="w-full" />
-            </div>
+          <div class="flex flex-col gap-1.5">
+            <label for="trade-notes" class="text-muted">--notes (optional)</label>
+            <textarea id="trade-notes" v-model="form.notes" placeholder="# why this trade" rows="3" class="t-input"></textarea>
           </div>
 
-          <div>
-            <label class="block text-sm text-dark-400 mb-2">Quantity</label>
-            <input v-model.number="form.quantity" type="number" placeholder="0.0" step="0.001" class="w-full" />
-          </div>
-
-          <div>
-            <label class="block text-sm text-dark-400 mb-2">Notes (Optional)</label>
-            <textarea v-model="form.notes" placeholder="Add notes..." rows="3" class="w-full"></textarea>
-          </div>
-
-          <button type="submit" class="btn btn-primary w-full bg-purple-700 hover:bg-purple-600" :disabled="submitting">
-            {{ submitting ? 'Launching...' : 'Launch Raid' }}
+          <button type="submit" class="t-btn justify-start py-3.5" :disabled="submitting">
+            {{ submitting ? '$ executing...' : '$ ./execute --' + (isRealTrading ? 'real' : 'paper') + ' ⏎' }}
           </button>
         </form>
-      </div>
+      </TermPanel>
 
-      <div class="lg:col-span-2">
-        <div class="chart-container border-purple-700">
-          <h2 class="text-xl font-semibold mb-4 text-purple-400">Active Conquests</h2>
-          <div v-if="loading" class="text-center py-8 text-dark-400">Loading...</div>
-          <div v-else class="space-y-3">
-            <div
-              v-for="trade in openTrades"
-              :key="trade.id"
-              class="border border-dark-700 rounded-lg p-4 hover:bg-dark-800 transition"
-            >
-              <div class="flex justify-between items-start mb-2">
-                <div>
-                  <div class="font-semibold">{{ trade.symbol }}</div>
-                  <div class="text-sm" :class="trade.trade_type === 'BUY' ? 'text-positive' : 'text-negative'">{{ trade.trade_type }}</div>
-                </div>
-                <div class="flex items-center gap-3">
-                  <!-- Live P&L -->
-                  <div v-if="currentPrices[trade.symbol]" class="text-right">
-                    <div class="text-xs text-dark-400">P&L</div>
-                    <div class="font-semibold" :class="getTradePnL(trade) >= 0 ? 'text-positive' : 'text-negative'">
-                      {{ getTradePnL(trade) >= 0 ? '+' : '' }}${{ getTradePnL(trade).toFixed(2) }}
-                    </div>
-                  </div>
-                  <!-- R value -->
-                  <div v-if="formatR(trade) !== '-'" class="text-right">
-                    <div class="text-xs text-dark-400">R</div>
-                    <div class="font-semibold text-secondary-400">
-                      {{ formatR(trade) }}
-                    </div>
-                  </div>
-                  <button
-                    @click="selectTradeForClose(trade)"
-                    class="btn btn-secondary text-sm"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-              <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
-                <div>
-                  <div class="text-dark-400">Entry Price</div>
-                  <div class="font-semibold">${{ trade.entry_price.toFixed(2) }}</div>
-                </div>
-                <div>
-                  <div class="text-dark-400">Current</div>
-                  <div class="font-semibold">{{ currentPrices[trade.symbol] ? '$' + currentPrices[trade.symbol].toFixed(2) : '-' }}</div>
-                </div>
-                <div>
-                  <div class="text-dark-400">Quantity</div>
-                  <div class="font-semibold">{{ trade.quantity }}</div>
-                </div>
-                <div v-if="trade.stop_loss">
-                  <div class="text-dark-400">Stop Loss</div>
-                  <div class="font-semibold text-red-400">${{ trade.stop_loss.toFixed(2) }}</div>
-                </div>
-                <div v-if="trade.take_profit">
-                  <div class="text-dark-400">Take Profit</div>
-                  <div class="font-semibold text-green-400">${{ trade.take_profit.toFixed(2) }}</div>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="openTrades.length === 0" class="text-center py-8 text-dark-400">
-              No open positions. Create a new trade to get started.
-            </div>
-          </div>
+      <!-- Open positions -->
+      <TermPanel title="ps --positions" flush class="positions-column">
+        <template #meta>
+          <span>{{ openTrades.length }} running</span>
+        </template>
+        <div v-if="loading" class="px-3.5 py-4 text-muted">[..] loading<span class="cursor-text"> _</span></div>
+        <div v-else-if="openTrades.length === 0" class="px-3.5 py-4 text-muted">
+          no running positions, place an order to start one
         </div>
-      </div>
+        <div v-else class="overflow-x-auto">
+          <table class="t-table">
+            <thead>
+              <tr>
+                <th>PID</th>
+                <th>Symbol</th>
+                <th>Side</th>
+                <th>Entry</th>
+                <th>Mark</th>
+                <th>SL</th>
+                <th>TP</th>
+                <th>Qty</th>
+                <th>P&amp;L</th>
+                <th>R</th>
+                <th><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="trade in openTrades" :key="trade.id">
+                <td class="text-muted">0x{{ Number(trade.id).toString(16) }}</td>
+                <td>{{ trade.symbol }}</td>
+                <td :class="trade.trade_type === 'BUY' ? 'text-up' : 'text-down'">
+                  {{ trade.trade_type === 'BUY' ? 'LONG' : 'SHORT' }}
+                </td>
+                <td>{{ trade.entry_price.toFixed(2) }}</td>
+                <td>{{ currentPrices[trade.symbol] ? currentPrices[trade.symbol].toFixed(2) : '--' }}</td>
+                <td class="text-down">{{ trade.stop_loss ? trade.stop_loss.toFixed(2) : '--' }}</td>
+                <td class="text-tp">{{ trade.take_profit ? trade.take_profit.toFixed(2) : '--' }}</td>
+                <td>{{ trade.quantity }}</td>
+                <td class="font-bold" :class="getTradePnL(trade) >= 0 ? 'text-up' : 'text-down'">
+                  {{ currentPrices[trade.symbol] ? (getTradePnL(trade) >= 0 ? '+' : '') + getTradePnL(trade).toFixed(2) : '--' }}
+                </td>
+                <td>{{ formatR(trade) }}</td>
+                <td>
+                  <button @click="selectTradeForClose(trade)" class="t-btn-danger">close</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </TermPanel>
     </div>
 
     <!-- Close Trade Modal -->
-    <div v-if="tradeToClose" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="chart-container max-w-md w-full mx-4 border-purple-700">
-        <h3 class="text-xl font-semibold mb-4 text-purple-400">End Your Raid</h3>
-        <div class="mb-3 text-sm text-dark-400">
-          {{ tradeToClose.symbol }} - {{ tradeToClose.trade_type }} @ ${{ tradeToClose.entry_price.toFixed(2) }}
-        </div>
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm text-dark-400 mb-2">Exit Price</label>
-            <input v-model.number="closeForm.exitPrice" type="number" placeholder="0.00" step="0.01" class="w-full" />
+    <div
+      v-if="tradeToClose"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+      @click.self="tradeToClose = null"
+      @keydown.esc="tradeToClose = null"
+    >
+      <TermPanel title="close_position.sh" tone="surface" class="w-full max-w-md" role="dialog" aria-modal="true" aria-label="Close position">
+        <form class="flex flex-col gap-3" @submit.prevent="closeTrade">
+          <div class="text-muted">
+            0x{{ Number(tradeToClose.id).toString(16) }} · {{ tradeToClose.symbol }}
+            <span :class="tradeToClose.trade_type === 'BUY' ? 'text-up' : 'text-down'">{{ tradeToClose.trade_type === 'BUY' ? 'LONG' : 'SHORT' }}</span>
+            @ {{ tradeToClose.entry_price.toFixed(2) }}
           </div>
-          <div class="flex gap-3">
-            <button @click="closeTrade" class="btn btn-primary flex-1" :disabled="closingTrade">
-              {{ closingTrade ? 'Closing...' : 'Close Trade' }}
+          <div class="flex items-center gap-2.5">
+            <label for="close-exit" class="w-24 shrink-0 text-muted">--exit</label>
+            <input id="close-exit" v-model.number="closeForm.exitPrice" type="number" placeholder="0.00" step="0.01" class="t-input flex-1" autofocus />
+          </div>
+          <div class="flex gap-2">
+            <button type="submit" class="t-btn flex-1" :disabled="closingTrade">
+              {{ closingTrade ? 'closing...' : '$ ./close ⏎' }}
             </button>
-            <button @click="tradeToClose = null" class="btn btn-secondary flex-1">Cancel</button>
+            <button type="button" @click="tradeToClose = null" class="t-btn-ghost flex-1">esc</button>
           </div>
-        </div>
-      </div>
+        </form>
+      </TermPanel>
     </div>
 
     <!-- Closed Trades History -->
-    <div class="chart-container border-purple-700">
-      <h2 class="text-xl font-semibold mb-4 text-purple-400">Chronicles of Battle</h2>
-      <div v-if="closedTrades.length === 0" class="text-center py-8 text-dark-400">
-        No completed raids yet.
-      </div>
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="border-b border-dark-700">
-            <tr>
-              <th class="text-left py-2 text-dark-400">Symbol</th>
-              <th class="text-left py-2 text-dark-400">Type</th>
-              <th class="text-left py-2 text-dark-400">Entry</th>
-              <th class="text-left py-2 text-dark-400">Exit</th>
-              <th class="text-left py-2 text-dark-400">Qty</th>
-              <th class="text-left py-2 text-dark-400">P&L</th>
-              <th class="text-left py-2 text-dark-400">R</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="trade in closedTrades" :key="trade.id" class="border-b border-dark-800 hover:bg-dark-800 transition">
-              <td class="py-3">{{ trade.symbol }}</td>
-              <td class="py-3" :class="trade.trade_type === 'BUY' ? 'text-positive' : 'text-negative'">{{ trade.trade_type }}</td>
-              <td class="py-3">${{ trade.entry_price.toFixed(2) }}</td>
-              <td class="py-3">{{ trade.exit_price ? '$' + trade.exit_price.toFixed(2) : '-' }}</td>
-              <td class="py-3">{{ trade.quantity }}</td>
-              <td class="py-3 font-semibold" :class="(trade.profit_loss || 0) >= 0 ? 'text-positive' : 'text-negative'">
-                {{ trade.profit_loss != null ? (trade.profit_loss >= 0 ? '+' : '') + '$' + trade.profit_loss.toFixed(2) : '-' }}
-              </td>
-              <td class="py-3 font-semibold text-secondary-400">
-                {{ formatR(trade) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <HistoryTable :trades="closedTrades" />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, inject, onMounted, onUnmounted } from 'vue'
 import binanceWS from '../services/websocket'
+import TermPanel from '../components/term/TermPanel.vue'
+import HistoryTable from '../components/term/HistoryTable.vue'
+import { useLogStore } from '../stores/log'
+
+const isRealTrading = inject('isRealTrading')
+const log = useLogStore()
+
+const fields = [
+  { key: 'entry_price', flag: '--entry', step: '0.01', color: '' },
+  { key: 'stop_loss', flag: '--sl', step: '0.01', color: 'text-down' },
+  { key: 'take_profit', flag: '--tp', step: '0.01', color: 'text-tp' },
+  { key: 'quantity', flag: '--qty', step: '0.001', color: '' },
+]
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -257,7 +209,7 @@ const getTradeR = (trade) => {
 
 const formatR = (trade) => {
   const r = getTradeR(trade)
-  if (r === null) return '-'
+  if (r === null) return '--'
   return r.toFixed(2) + 'R'
 }
 
@@ -330,9 +282,12 @@ const submitTrade = async () => {
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
+    const f = form.value
+    log.push('FILL', `${f.trade_type === 'BUY' ? 'LONG' : 'SHORT'} ${f.quantity} ${f.symbol} @ ${f.entry_price}`)
     form.value = { symbol: '', trade_type: 'BUY', entry_price: null, stop_loss: null, take_profit: null, quantity: null, notes: '' }
     await fetchTrades()
   } catch (err) {
+    log.push('ERR', `order rejected: ${err.message}`)
     console.error('Failed to create trade:', err)
   } finally {
     submitting.value = false
@@ -357,9 +312,11 @@ const closeTrade = async () => {
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
+    log.push('FILL', `closed position 0x${Number(tradeToClose.value.id).toString(16)} @ ${closeForm.value.exitPrice}`)
     tradeToClose.value = null
     await fetchTrades()
   } catch (err) {
+    log.push('ERR', `close failed: ${err.message}`)
     console.error('Failed to close trade:', err)
   } finally {
     closingTrade.value = false
@@ -372,3 +329,20 @@ onUnmounted(() => {
   tickerUnsubs.value.forEach(unsub => unsub())
 })
 </script>
+
+<style scoped>
+.order-column {
+  flex: 1 1 320px;
+}
+
+.positions-column {
+  flex: 999 1 560px;
+}
+
+.t-btn-short {
+  @apply inline-flex items-center justify-center px-3.5 py-2.5 cursor-pointer;
+  background: var(--down);
+  color: var(--on-accent);
+  border: 1px solid var(--down);
+}
+</style>
