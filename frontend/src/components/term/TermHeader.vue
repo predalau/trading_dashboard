@@ -5,7 +5,7 @@
       <span class="md:hidden font-extrabold text-accent text-base">investhor:~$</span>
     </router-link>
 
-    <div class="prompt hidden sm:block" aria-label="Current page">
+    <div class="prompt hidden sm:block">
       <span>root@investhor</span><span class="text-accent">:</span><span>~{{ path }}</span><span class="text-accent"># </span>
       <span class="text-term-text">{{ command }}</span><span class="cursor" aria-hidden="true"></span>
     </div>

@@ -13,7 +13,7 @@
 
     <!-- User Info -->
     <TermPanel title="whoami">
-      <div v-if="loading" class="text-muted">[..] loading<span class="cursor-text"> _</span></div>
+      <div v-if="loading" class="text-muted">[..] loading<span class="cursor-text" aria-hidden="true"> _</span></div>
       <dl v-else class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
         <dt class="text-muted">account:</dt>
         <dd>{{ account.account_name || 'paper-account' }}</dd>

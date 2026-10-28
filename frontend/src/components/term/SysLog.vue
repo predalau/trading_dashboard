@@ -8,12 +8,12 @@
       aria-label="System log"
     >
       <div v-if="log.entries.length === 0" class="text-muted">
-        waiting for events<span class="cursor-text"> _</span>
+        waiting for events<span class="cursor-text" aria-hidden="true"> _</span>
       </div>
       <div v-for="(entry, i) in log.entries" :key="entry.id">
         <span class="text-muted">{{ entry.time }}</span>
         <span :class="levelClass(entry)"> [{{ entry.level }}]</span>
-        {{ entry.msg }}<span v-if="i === log.entries.length - 1" class="cursor-text"> _</span>
+        {{ entry.msg }}<span v-if="i === log.entries.length - 1" class="cursor-text" aria-hidden="true"> _</span>
       </div>
     </div>
   </TermPanel>

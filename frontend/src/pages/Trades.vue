@@ -64,7 +64,7 @@
         <template #meta>
           <span>{{ openTrades.length }} running</span>
         </template>
-        <div v-if="loading" class="px-3.5 py-4 text-muted">[..] loading<span class="cursor-text"> _</span></div>
+        <div v-if="loading" class="px-3.5 py-4 text-muted">[..] loading<span class="cursor-text" aria-hidden="true"> _</span></div>
         <div v-else-if="openTrades.length === 0" class="px-3.5 py-4 text-muted">
           no running positions, place an order to start one
         </div>

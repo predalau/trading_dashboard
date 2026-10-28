@@ -151,7 +151,7 @@
             </div>
 
             <div v-if="clickMode" class="text-accent">
-              &gt; click the chart to set {{ clickMode === 'entry' ? 'entry' : clickMode === 'sl' ? 'stop loss' : 'take profit' }}<span class="cursor-text"> _</span>
+              &gt; click the chart to set {{ clickMode === 'entry' ? 'entry' : clickMode === 'sl' ? 'stop loss' : 'take profit' }}<span class="cursor-text" aria-hidden="true"> _</span>
             </div>
 
             <button

@@ -14,7 +14,7 @@
     >
       <div class="text-center">
         <p :class="error ? 'text-down' : 'text-muted'">
-          {{ error ? '[ERR] ' + error : '[..] loading ' + symbol.toLowerCase() + '@kline_' + interval }}<span v-if="!error" class="cursor-text"> _</span>
+          {{ error ? '[ERR] ' + error : '[..] loading ' + symbol.toLowerCase() + '@kline_' + interval }}<span v-if="!error" class="cursor-text" aria-hidden="true"> _</span>
         </p>
         <button v-if="error" @click="initChart" class="t-btn-ghost mt-4">$ retry</button>
       </div>
