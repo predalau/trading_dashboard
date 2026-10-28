@@ -65,6 +65,7 @@ class BinanceWebSocket {
 
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error)
+          sysLog('ERR', 'ws error, stream.binance.com unreachable')
           this.isConnected = false
           this.connectPromise = null
           reject(error)
