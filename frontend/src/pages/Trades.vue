@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-5">
     <h1 class="sr-only">Trades</h1>
 
-    <div class="flex flex-wrap gap-5">
+    <div class="flex flex-wrap items-start gap-5">
       <!-- New Trade Form -->
       <TermPanel title="new_order.sh" tone="surface" class="order-column">
         <form @submit.prevent="submitTrade" class="flex flex-col gap-3">

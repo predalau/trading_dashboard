@@ -26,8 +26,12 @@
 }
 
 html, body {
-  height: 100%;
-  overflow-x: hidden;
+  min-height: 100%;
+}
+
+/* clip (not hidden) so the window, not body, stays the scroll container */
+body {
+  overflow-x: clip;
 }
 
 body {
