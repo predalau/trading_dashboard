@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.backtest.engine import run as run_engine
 from app.backtest.registry import load_strategy
 from app.backtest.param_spec import describe_params
+from app.backtest.trend_bias import build_bias_series, higher_timeframes
 from app.database import get_db
 from app.deps.auth import get_api_key, require_scope
 from app.models import ApiKey, Backtest, StrategyDef
@@ -54,6 +55,12 @@ class RunRequest(BaseModel):
     initial_cash: float = 10_000.0
     fee_bps: float = 10.0
     slippage_bps: float = 5.0
+    # Multi-timeframe trend bias (gates entries against higher-TF trend)
+    bias_enabled: bool = False
+    bias_sma_len: int = 50
+    bias_entry_threshold: float = 0.0     # -1 = off .. +1 = require full HTF alignment
+    bias_exit_enabled: bool = False
+    bias_exit_threshold: float = -0.5     # force-close a long when HTF turns this bearish
 
 
 def _now_ms() -> int:
@@ -196,8 +203,20 @@ async def run_backtest(body: RunRequest, db: Session = Depends(get_db)):
             raise ValueError("no OHLCV data available for this symbol/timeframe/range")
 
         strategy = load_strategy(module, params)
-        result = run_engine(bars, strategy, initial_cash=body.initial_cash,
-                            fee_bps=body.fee_bps, slippage_bps=body.slippage_bps)
+
+        # Optional multi-timeframe trend bias
+        bias = None
+        htfs = []
+        if body.bias_enabled:
+            bias, htfs = await build_bias_series(
+                db, body.symbol, body.timeframe, bars, sma_len=body.bias_sma_len)
+        result = run_engine(
+            bars, strategy,
+            initial_cash=body.initial_cash, fee_bps=body.fee_bps, slippage_bps=body.slippage_bps,
+            bias=bias,
+            entry_threshold=(body.bias_entry_threshold if body.bias_enabled else -1.0),
+            exit_threshold=(body.bias_exit_threshold if (body.bias_enabled and body.bias_exit_enabled) else None),
+        )
         bt.metrics = result["metrics"]
         bt.equity_curve = result["equity_curve"]
         bt.trades = result["trades"]
@@ -211,7 +230,8 @@ async def run_backtest(body: RunRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"backtest failed: {exc}")
 
     return {"id": bt.id, "status": bt.status, "symbol": bt.symbol,
-            "timeframe": bt.timeframe, "bars": len(bars), "metrics": bt.metrics}
+            "timeframe": bt.timeframe, "bars": len(bars), "metrics": bt.metrics,
+            "trend_bias": {"enabled": body.bias_enabled, "higher_timeframes": htfs}}
 
 
 @router.get("/{backtest_id}")

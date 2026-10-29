@@ -65,3 +65,30 @@ def test_open_position_at_end_has_entry_but_no_exit():
     assert t["entry_ts"] == 0
     assert t["exit_ts"] is None and t["pnl"] is None   # still open -> not counted as closed
     assert res["metrics"]["num_trades"] == 0
+
+
+def test_bias_blocks_entry_below_threshold():
+    bars = _bars([100, 110, 120, 130, 140])
+    neg_bias = [-1.0] * len(bars)   # higher timeframes bearish everywhere
+    res = run(bars, AlwaysLong(), initial_cash=10_000, fee_bps=0, slippage_bps=0,
+              bias=neg_bias, entry_threshold=0.0)
+    assert res["metrics"]["num_trades"] == 0  # entry suppressed
+    assert res["trades"] == []
+
+
+def test_bias_allows_entry_when_aligned():
+    bars = _bars([100, 110, 120, 130, 140])
+    pos_bias = [1.0] * len(bars)
+    res = run(bars, AlwaysLong(), initial_cash=10_000, fee_bps=0, slippage_bps=0,
+              bias=pos_bias, entry_threshold=0.0)
+    assert res["metrics"]["total_return"] > 0  # allowed, rides the uptrend
+
+
+def test_bias_force_exit_on_strong_flip():
+    bars = _bars([100, 110, 120, 130, 140])
+    # bullish early (enter), then strongly bearish at bar 2 -> force exit
+    b = [1.0, 1.0, -1.0, -1.0, -1.0]
+    res = run(bars, AlwaysLong(), initial_cash=10_000, fee_bps=0, slippage_bps=0,
+              bias=b, entry_threshold=0.0, exit_threshold=-0.5)
+    assert len(res["trades"]) == 1
+    assert res["trades"][0]["exit_ts"] == 2   # forced out at the flip bar

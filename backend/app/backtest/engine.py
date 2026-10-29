@@ -9,7 +9,15 @@ import math
 from statistics import mean, pstdev
 
 
-def run(bars, strategy, *, initial_cash=10_000.0, fee_bps=10.0, slippage_bps=5.0) -> dict:
+def run(bars, strategy, *, initial_cash=10_000.0, fee_bps=10.0, slippage_bps=5.0,
+        bias=None, entry_threshold=-1.0, exit_threshold=None) -> dict:
+    """Event-driven long/flat backtest.
+
+    Optional multi-timeframe trend bias: `bias` is a per-bar score in -1..+1.
+    Entries (BUY) are only taken when bias[i] >= entry_threshold. If
+    exit_threshold is set, an open position is force-closed when bias[i] <=
+    exit_threshold (regardless of the strategy's own signal).
+    """
     cash = float(initial_cash)
     qty = 0.0
     entry_price = 0.0
@@ -20,10 +28,22 @@ def run(bars, strategy, *, initial_cash=10_000.0, fee_bps=10.0, slippage_bps=5.0
     fee = fee_bps / 10_000.0
     slip = slippage_bps / 10_000.0
 
+    def _bias(i):
+        return bias[i] if (bias is not None and i < len(bias)) else None
+
     for i, bar in enumerate(bars):
         close = bar["close"]
         sig = strategy.on_bar(i, bars)
         action = sig.action.upper() if sig else "HOLD"
+
+        # Multi-timeframe gate: block entries that fight the higher-TF trend
+        b = _bias(i)
+        if action == "BUY" and b is not None and b < entry_threshold:
+            action = "HOLD"
+        # Force-exit when the higher-TF trend flips hard against an open long
+        if (qty > 0.0 and exit_threshold is not None and b is not None
+                and b <= exit_threshold):
+            action = "SELL"
 
         if action == "BUY" and qty == 0.0 and cash > 0:
             fill = close * (1 + slip)

@@ -79,6 +79,50 @@
           </div>
         </div>
 
+        <!-- Multi-timeframe trend bias (applies to single strategies and combos) -->
+        <div class="flex flex-col gap-2 border-t border-term-line pt-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="text-muted text-xs">--trend-bias</span>
+            <button type="button" class="t-btn px-4 py-1.5" :class="bias.enabled ? '' : 't-btn-ghost'"
+                    @click="bias.enabled = !bias.enabled">{{ bias.enabled ? 'on' : 'off' }}</button>
+            <span v-if="bias.enabled && higherTFs.length" class="text-muted text-xs">
+              uses {{ higherTFs.join(' + ') }} trend
+            </span>
+            <span v-else-if="bias.enabled" class="text-down text-xs">no higher timeframe above {{ form.timeframe }}</span>
+          </div>
+
+          <template v-if="bias.enabled">
+            <p class="text-muted text-xs -mt-1">Blocks entries that fight the higher-timeframe trend (price vs SMA). −1 = off · +1 = require full alignment.</p>
+
+            <div class="flex items-center gap-3">
+              <span class="text-xs w-24 shrink-0">SMA length</span>
+              <input type="number" min="5" max="200" step="1" v-model.number="bias.sma_len"
+                     class="t-input text-center shrink-0 px-1" style="width: 3.5rem; flex: none" />
+              <input type="range" min="5" max="200" step="1" v-model.number="bias.sma_len" class="param-slider flex-1 min-w-0" />
+            </div>
+
+            <div class="flex items-center gap-3">
+              <span class="text-xs w-24 shrink-0">entry ≥</span>
+              <input type="number" min="-1" max="1" step="0.1" v-model.number="bias.entry_threshold"
+                     class="t-input text-center shrink-0 px-1" style="width: 3.5rem; flex: none" />
+              <input type="range" min="-1" max="1" step="0.1" v-model.number="bias.entry_threshold" class="param-slider flex-1 min-w-0" />
+            </div>
+
+            <div class="flex items-center gap-3">
+              <span class="text-xs w-24 shrink-0">force exit</span>
+              <button type="button" class="t-btn px-4 py-1.5" :class="bias.exit_enabled ? '' : 't-btn-ghost'"
+                      @click="bias.exit_enabled = !bias.exit_enabled">{{ bias.exit_enabled ? 'on' : 'off' }}</button>
+              <span class="text-muted text-xs">close a long when the higher-TF trend flips bearish</span>
+            </div>
+            <div v-if="bias.exit_enabled" class="flex items-center gap-3">
+              <span class="text-xs w-24 shrink-0">exit ≤</span>
+              <input type="number" min="-1" max="0" step="0.1" v-model.number="bias.exit_threshold"
+                     class="t-input text-center shrink-0 px-1" style="width: 3.5rem; flex: none" />
+              <input type="range" min="-1" max="0" step="0.1" v-model.number="bias.exit_threshold" class="param-slider flex-1 min-w-0" />
+            </div>
+          </template>
+        </div>
+
         <div class="flex items-center gap-3">
           <button type="submit" class="t-btn justify-start py-3" :disabled="running">
             {{ running ? '$ running backtest...' : '$ ./backtest --run ⏎' }}
@@ -156,6 +200,14 @@ const comboName = ref('')
 const savingCombo = ref(false)
 const comboMsg = ref('')
 const comboErr = ref(false)
+
+// Multi-timeframe trend bias
+const bias = ref({ enabled: false, sma_len: 50, entry_threshold: 0.0, exit_enabled: false, exit_threshold: -0.5 })
+const TF_LADDER = ['15m', '1h', '4h', '1d', '1w']
+const higherTFs = computed(() => {
+  const i = TF_LADDER.indexOf(form.value.timeframe)
+  return i < 0 ? [] : TF_LADDER.slice(i + 1).slice(0, 2)
+})
 
 const currentStrategy = computed(() =>
   strategies.value.find((s) => s.slug === form.value.slug) || null
@@ -316,6 +368,11 @@ const run = async () => {
         timeframe: form.value.timeframe,
         lookback: form.value.lookback,
         params: buildRunParams(),
+        bias_enabled: bias.value.enabled,
+        bias_sma_len: bias.value.sma_len,
+        bias_entry_threshold: bias.value.entry_threshold,
+        bias_exit_enabled: bias.value.exit_enabled,
+        bias_exit_threshold: bias.value.exit_threshold,
       }),
     })
     const body = await runRes.json()
