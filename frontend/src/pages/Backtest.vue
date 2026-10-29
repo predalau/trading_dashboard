@@ -35,43 +35,7 @@
         <div v-if="currentSpec.length && !isEnsemble" class="flex flex-col gap-2 border-t border-term-line pt-3">
           <span class="text-muted text-xs">--params</span>
           <p v-if="currentStrategy?.description" class="text-muted text-xs -mt-1">{{ currentStrategy.description }}</p>
-          <div v-for="p in currentSpec" :key="p.name" class="flex items-center gap-3">
-            <span class="text-xs w-24 shrink-0">{{ p.label || p.name }}</span>
-
-            <button
-              v-if="p.type === 'bool'"
-              type="button"
-              class="t-btn px-4 py-1.5"
-              :class="form.params[p.name] ? '' : 't-btn-ghost'"
-              @click="form.params[p.name] = !form.params[p.name]"
-            >{{ form.params[p.name] ? 'on' : 'off' }}</button>
-
-            <select
-              v-else-if="p.type === 'choice'"
-              v-model="form.params[p.name]"
-              class="t-input"
-            >
-              <option v-for="c in (p.choices || [])" :key="c" :value="c">{{ c }}</option>
-            </select>
-
-            <template v-else-if="p.type === 'int' || p.type === 'float'">
-              <input
-                type="number"
-                :min="p.min" :max="p.max" :step="p.step || 1"
-                v-model.number="form.params[p.name]"
-                class="t-input text-center shrink-0 px-1"
-                style="width: 3.5rem; flex: none"
-              />
-              <input
-                type="range"
-                :min="p.min" :max="p.max" :step="p.step || 1"
-                v-model.number="form.params[p.name]"
-                class="param-slider flex-1 min-w-0"
-              />
-            </template>
-
-            <input v-else v-model="form.params[p.name]" class="t-input flex-1" />
-          </div>
+          <ParamControls :spec="currentSpec" :params="form.params" />
         </div>
 
         <!-- Combine strategies (ensemble) builder -->
@@ -82,16 +46,19 @@
           </div>
           <p class="text-muted text-xs -mt-1">Weighted vote — goes long when the weighted long-score ≥ threshold.</p>
 
-          <div v-for="(c, idx) in combo.components" :key="idx" class="flex items-center gap-3">
-            <select v-model="c.module" class="t-input flex-1 min-w-0">
-              <option v-for="s in combinable" :key="s.slug" :value="s.module">{{ s.name || s.slug }}</option>
-            </select>
-            <span class="text-xs text-muted shrink-0">w</span>
-            <input type="number" min="1" max="10" step="1" v-model.number="c.weight"
-                   class="t-input text-center shrink-0 px-1" style="width: 3.5rem; flex: none" />
-            <input type="range" min="1" max="10" step="1" v-model.number="c.weight"
-                   class="param-slider shrink-0" style="width: 120px" />
-            <button type="button" class="t-btn-danger text-xs px-2 py-1 shrink-0" @click="removeComponent(idx)">x</button>
+          <div v-for="(c, idx) in combo.components" :key="idx" class="flex flex-col gap-2 border border-term-line p-2">
+            <div class="flex items-center gap-3">
+              <select v-model="c.module" @change="onComponentModuleChange(c)" class="t-input flex-1 min-w-0">
+                <option v-for="s in combinable" :key="s.slug" :value="s.module">{{ s.name || s.slug }}</option>
+              </select>
+              <span class="text-xs text-muted shrink-0">w</span>
+              <input type="number" min="1" max="10" step="1" v-model.number="c.weight"
+                     class="t-input text-center shrink-0 px-1" style="width: 3.5rem; flex: none" />
+              <input type="range" min="1" max="10" step="1" v-model.number="c.weight"
+                     class="param-slider shrink-0" style="width: 120px" />
+              <button type="button" class="t-btn-danger text-xs px-2 py-1 shrink-0" @click="removeComponent(idx)">x</button>
+            </div>
+            <ParamControls v-if="specFor(c.module).length" :spec="specFor(c.module)" :params="c.params" />
           </div>
           <p v-if="!combo.components.length" class="text-muted text-xs">no strategies yet — click “+ add strategy”.</p>
 
@@ -161,6 +128,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import TermPanel from '../components/term/TermPanel.vue'
 import BacktestChart from '../components/BacktestChart.vue'
+import ParamControls from '../components/ParamControls.vue'
 
 const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
 const timeframes = ['15m', '1h', '4h', '1d']
@@ -197,6 +165,15 @@ const isEnsemble = computed(() => currentStrategy.value?.module === 'strategies.
 // strategies that can be used as components (exclude ensembles to avoid nesting)
 const combinable = computed(() => strategies.value.filter((s) => s.module !== 'strategies.ensemble'))
 
+// param spec + default params for a given strategy module (used by combo components)
+const specFor = (module) => strategies.value.find((s) => s.module === module)?.param_spec || []
+const defaultParamsFor = (module) => {
+  const s = strategies.value.find((x) => x.module === module)
+  const out = {}
+  for (const p of (s?.param_spec || [])) out[p.name] = s.params?.[p.name] ?? p.default
+  return out
+}
+
 // Seed the params object from the selected strategy's defaults
 const resetParams = () => {
   const next = {}
@@ -212,7 +189,11 @@ const seedCombo = () => {
   const p = currentStrategy.value?.params || {}
   combo.value = {
     threshold: typeof p.threshold === 'number' ? p.threshold : 0.5,
-    components: (p.components || []).map((c) => ({ module: c.module, weight: Number(c.weight) || 1 })),
+    components: (p.components || []).map((c) => ({
+      module: c.module,
+      weight: Number(c.weight) || 1,
+      params: { ...defaultParamsFor(c.module), ...(c.params || {}) },
+    })),
   }
   comboMsg.value = ''
   comboName.value = currentStrategy.value?.id != null ? (currentStrategy.value.name || '') : ''
@@ -227,9 +208,12 @@ watch(() => form.value.slug, onStrategyChange)
 
 const addComponent = () => {
   const first = combinable.value[0]
-  combo.value.components.push({ module: first ? first.module : '', weight: 1 })
+  const module = first ? first.module : ''
+  combo.value.components.push({ module, weight: 1, params: defaultParamsFor(module) })
 }
 const removeComponent = (idx) => combo.value.components.splice(idx, 1)
+// reset a component's params to the new strategy's defaults when its module changes
+const onComponentModuleChange = (c) => { c.params = defaultParamsFor(c.module) }
 
 const buildRunParams = () => {
   if (isEnsemble.value) {
@@ -237,7 +221,7 @@ const buildRunParams = () => {
       threshold: combo.value.threshold,
       components: combo.value.components
         .filter((c) => c.module)
-        .map((c) => ({ module: c.module, params: {}, weight: Number(c.weight) || 1 })),
+        .map((c) => ({ module: c.module, params: { ...c.params }, weight: Number(c.weight) || 1 })),
     }
   }
   return form.value.params
@@ -249,7 +233,7 @@ const saveCombo = async () => {
   if (!name) { comboErr.value = true; comboMsg.value = 'name required'; return }
   const comps = combo.value.components
     .filter((c) => c.module)
-    .map((c) => ({ module: c.module, params: {}, weight: Number(c.weight) || 1 }))
+    .map((c) => ({ module: c.module, params: { ...c.params }, weight: Number(c.weight) || 1 }))
   if (!comps.length) { comboErr.value = true; comboMsg.value = 'add at least one strategy'; return }
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   savingCombo.value = true
