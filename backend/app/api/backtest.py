@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import Float, Integer, cast, func
 from sqlalchemy.orm import Session
 
 from app.backtest.engine import run as run_engine
@@ -329,8 +329,14 @@ def cancel_sweep(sweep_id: int, db: Session = Depends(get_db)):
 @router.get("/results")
 def query_results(symbol: Optional[str] = None, timeframe: Optional[str] = None,
                   slug: Optional[str] = None, bias: Optional[str] = None,
+                  min_trades: int = 3, min_avg_pct: float = 0.0,
                   limit: int = 100, db: Session = Depends(get_db)):
-    """Filterable top results over the whole sweep cache (ranked by score)."""
+    """Filterable top results over the whole sweep cache (ranked by score).
+
+    Low-sample strategies (< min_trades, default 3) are excluded, and
+    min_avg_pct screens out tiny-edge configs whose average %/trade would be
+    eaten by fees/taxes.
+    """
     q = db.query(SweepResult)
     if symbol:
         q = q.filter(SweepResult.symbol == symbol)
@@ -342,6 +348,13 @@ def query_results(symbol: Optional[str] = None, timeframe: Optional[str] = None,
         q = q.filter(func.jsonb_extract_path_text(SweepResult.bias, "enabled") == "true")
     elif bias == "off":
         q = q.filter(func.jsonb_extract_path_text(SweepResult.bias, "enabled") == "false")
+    if min_trades > 0:
+        q = q.filter(
+            cast(func.jsonb_extract_path_text(SweepResult.metrics, "num_trades"), Integer) >= min_trades)
+    if min_avg_pct and min_avg_pct > 0:
+        q = q.filter(
+            cast(func.jsonb_extract_path_text(SweepResult.metrics, "avg_trade_return"), Float)
+            >= (min_avg_pct / 100.0))
     rows = q.order_by(SweepResult.score.desc().nullslast()).limit(min(limit, 500)).all()
     return [{
         "config": {"slug": r.slug, "module": r.module, "params": r.params,

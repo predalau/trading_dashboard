@@ -64,6 +64,8 @@ def run(bars, strategy, *, initial_cash=10_000.0, fee_bps=10.0, slippage_bps=5.0
                 open_trade["exit_ts"] = bar["ts"]
                 open_trade["exit_price"] = fill
                 open_trade["pnl"] = pnl
+                entry_cost = qty * entry_price
+                open_trade["ret"] = (pnl / entry_cost) if entry_cost else 0.0
             open_trade = None
             cash = proceeds
             qty = 0.0
@@ -103,6 +105,10 @@ def _metrics(equity_curve, trades, initial_cash, final_equity, bars) -> dict:
     closed = [t for t in trades if t.get("pnl") is not None]
     buy_hold = (bars[-1]["close"] / bars[0]["close"] - 1.0) if len(bars) >= 2 else 0.0
 
+    trade_rets = [t["ret"] for t in closed if t.get("ret") is not None]
+    avg_trade_return = mean(trade_rets) if trade_rets else 0.0
+    avg_trade_pnl = mean([t["pnl"] for t in closed]) if closed else 0.0
+
     return {
         "total_return": total_return,
         "buy_hold_return": buy_hold,
@@ -110,5 +116,7 @@ def _metrics(equity_curve, trades, initial_cash, final_equity, bars) -> dict:
         "sharpe": sharpe,
         "num_trades": len(closed),
         "win_rate": (len(wins) / len(closed)) if closed else 0.0,
+        "avg_trade_return": avg_trade_return,
+        "avg_trade_pnl": avg_trade_pnl,
         "final_equity": final_equity,
     }

@@ -229,7 +229,13 @@
           <option value="on">bias: on</option>
           <option value="off">bias: off</option>
         </select>
-        <button v-if="reportFilters.symbol || reportFilters.timeframe || reportFilters.slug || reportFilters.bias"
+        <label class="flex items-center gap-1 text-muted text-xs">min trades
+          <input v-model.number="reportFilters.minTrades" type="number" min="0" class="t-input w-16" />
+        </label>
+        <label class="flex items-center gap-1 text-muted text-xs">min avg %/trade
+          <input v-model.number="reportFilters.minAvg" type="number" step="0.05" class="t-input w-20" />
+        </label>
+        <button v-if="reportFilters.symbol || reportFilters.timeframe || reportFilters.slug || reportFilters.bias || reportFilters.minTrades !== 3 || reportFilters.minAvg"
                 type="button" class="t-btn-ghost text-xs px-2" @click="clearReportFilters">clear</button>
       </div>
 
@@ -241,7 +247,7 @@
           <thead>
             <tr>
               <th>#</th><th>strategy</th><th>symbol</th><th>tf</th>
-              <th>params</th><th>bias</th><th>return</th><th>trades</th><th></th><th></th>
+              <th>params</th><th>bias</th><th>return</th><th>avg/trade</th><th>trades</th><th></th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -255,6 +261,7 @@
               <td class="text-muted text-xs">{{ paramsStr(r.config.params) }}</td>
               <td class="text-xs">{{ r.config.bias.enabled ? ('≥' + r.config.bias.entry_threshold) : '—' }}</td>
               <td :class="r.score >= 0 ? 'text-up' : 'text-down'">{{ pct(r.score) }}</td>
+              <td :class="avgPerTrade(r.metrics) >= 0 ? 'text-up' : 'text-down'">{{ pct(avgPerTrade(r.metrics)) }}</td>
               <td>{{ r.metrics.num_trades }}</td>
               <td class="text-muted hover:text-accent text-xs" @click.stop="saveConfigFromRow(r.config)">save</td>
               <td class="text-accent text-xs">run ▸</td>
@@ -545,7 +552,7 @@ onMounted(() => { fetchStrategies(); fetchResults(); fetchSavedConfigs(); fetchS
 onUnmounted(() => { if (sweepPoll) clearInterval(sweepPoll) })
 
 // ---- Report: filterable results over the sweep cache ----
-const reportFilters = ref({ symbol: '', timeframe: '', slug: '', bias: '' })
+const reportFilters = ref({ symbol: '', timeframe: '', slug: '', bias: '', minTrades: 3, minAvg: 0 })
 const reportRows = ref([])
 const strategyOptions = computed(() => combinable.value.map((s) => ({ slug: s.slug, name: s.name || s.slug })))
 
@@ -556,14 +563,24 @@ const fetchResults = async () => {
   if (f.timeframe) p.set('timeframe', f.timeframe)
   if (f.slug) p.set('slug', f.slug)
   if (f.bias) p.set('bias', f.bias)
+  p.set('min_trades', String(f.minTrades ?? 3))
+  if (f.minAvg) p.set('min_avg_pct', String(f.minAvg))
   p.set('limit', '100')
   try {
     const r = await fetch('/trading/api/v1/backtest/results?' + p.toString())
     if (r.ok) reportRows.value = await r.json()
   } catch (e) { /* ignore */ }
 }
-const clearReportFilters = () => { reportFilters.value = { symbol: '', timeframe: '', slug: '', bias: '' } }
+const clearReportFilters = () => { reportFilters.value = { symbol: '', timeframe: '', slug: '', bias: '', minTrades: 3, minAvg: 0 } }
 watch(reportFilters, fetchResults, { deep: true })
+
+// avg %/trade for a result row (fallback for pre-metric cached rows)
+const avgPerTrade = (m) => {
+  if (!m) return null
+  if (m.avg_trade_return != null) return m.avg_trade_return
+  if (m.num_trades) return m.total_return / m.num_trades   // rough fallback
+  return null
+}
 
 // ---- Saved configs (presets) + sweep history ----
 const savedConfigs = ref([])

@@ -21,6 +21,16 @@ def _bars(closes):
             for i, c in enumerate(closes)]
 
 
+def test_avg_trade_return_is_mean_per_trade_gain():
+    # buy bar0 @100, sell last @120 -> one trade, +20%
+    bars = _bars([100, 100, 110, 120])
+    res = run(bars, BuyThenSell(), initial_cash=10_000, fee_bps=0, slippage_bps=0)
+    m = res["metrics"]
+    assert m["num_trades"] == 1
+    assert abs(m["avg_trade_return"] - 0.20) < 1e-9
+    assert m["avg_trade_pnl"] > 0
+
+
 def test_always_long_profits_on_rising_series():
     bars = _bars([100, 110, 120, 130, 140])
     res = run(bars, AlwaysLong(), initial_cash=10_000, fee_bps=0, slippage_bps=0)
