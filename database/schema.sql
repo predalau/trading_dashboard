@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS backtests (
     status VARCHAR(20) DEFAULT 'pending',
     metrics JSONB,
     equity_curve JSONB,
+    trades JSONB,
     error VARCHAR(1000),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

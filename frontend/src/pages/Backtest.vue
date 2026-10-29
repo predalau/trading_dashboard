@@ -95,7 +95,16 @@
           </div>
         </div>
 
+        <!-- Price chart with entry (BUY ▲) / exit (SELL ■) markers -->
+        <div>
+          <div class="text-muted text-[11px] uppercase tracking-[0.12em] mb-1">price · entries &amp; exits</div>
+          <div class="border border-term-line bg-term-surface">
+            <BacktestChart :bars="chartBars" :trades="result.trades || []" />
+          </div>
+        </div>
+
         <!-- Equity curve -->
+        <div class="text-muted text-[11px] uppercase tracking-[0.12em]">equity curve</div>
         <svg v-if="curvePoints" :viewBox="`0 0 ${W} ${H}`" class="w-full border border-term-line bg-term-surface" preserveAspectRatio="none" style="height:160px">
           <polyline :points="curvePoints" fill="none" :stroke="result.metrics.total_return >= 0 ? 'var(--up, #3fb950)' : 'var(--down, #f85149)'" stroke-width="1.5" />
         </svg>
@@ -111,6 +120,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import TermPanel from '../components/term/TermPanel.vue'
+import BacktestChart from '../components/BacktestChart.vue'
 
 const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
 const timeframes = ['15m', '1h', '4h', '1d']
@@ -122,6 +132,7 @@ const strategies = ref([])
 const running = ref(false)
 const error = ref('')
 const result = ref(null)
+const chartBars = ref([])
 
 const form = ref({
   module: 'strategies.sma_cross',
@@ -210,10 +221,14 @@ const run = async () => {
     })
     const body = await runRes.json()
     if (!runRes.ok) throw new Error(body.detail || `HTTP ${runRes.status}`)
-    // fetch full record (with equity curve)
-    const full = await fetch(`/trading/api/v1/backtest/${body.id}`)
-    result.value = await full.json()
+    // fetch full record (with equity curve + trades) and price bars for the chart
+    const [full, ohlcv] = await Promise.all([
+      fetch(`/trading/api/v1/backtest/${body.id}`).then(r => r.json()),
+      fetch(`/trading/api/v1/backtest/${body.id}/ohlcv`).then(r => r.ok ? r.json() : { bars: [] }),
+    ])
+    result.value = full
     result.value.bars = body.bars
+    chartBars.value = ohlcv.bars || []
   } catch (e) {
     error.value = e.message
   } finally {

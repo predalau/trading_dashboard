@@ -13,7 +13,8 @@ def run(bars, strategy, *, initial_cash=10_000.0, fee_bps=10.0, slippage_bps=5.0
     cash = float(initial_cash)
     qty = 0.0
     entry_price = 0.0
-    trades = []  # realized round-trips: {"pnl": float}
+    trades = []  # round-trips: {entry_ts, entry_price, exit_ts, exit_price, pnl}
+    open_trade = None
     equity_curve = []
 
     fee = fee_bps / 10_000.0
@@ -31,12 +32,19 @@ def run(bars, strategy, *, initial_cash=10_000.0, fee_bps=10.0, slippage_bps=5.0
             qty = (notional - fee_paid) / fill
             entry_price = fill
             cash = 0.0
+            open_trade = {"entry_ts": bar["ts"], "entry_price": fill,
+                          "exit_ts": None, "exit_price": None, "pnl": None}
+            trades.append(open_trade)
         elif action == "SELL" and qty > 0.0:
             fill = close * (1 - slip)
             proceeds = qty * fill
             proceeds -= proceeds * fee
             pnl = proceeds - (qty * entry_price)
-            trades.append({"pnl": pnl})
+            if open_trade is not None:
+                open_trade["exit_ts"] = bar["ts"]
+                open_trade["exit_price"] = fill
+                open_trade["pnl"] = pnl
+            open_trade = None
             cash = proceeds
             qty = 0.0
             entry_price = 0.0
@@ -46,7 +54,8 @@ def run(bars, strategy, *, initial_cash=10_000.0, fee_bps=10.0, slippage_bps=5.0
 
     final_equity = equity_curve[-1]["equity"] if equity_curve else initial_cash
     metrics = _metrics(equity_curve, trades, initial_cash, final_equity, bars)
-    return {"equity_curve": equity_curve, "metrics": metrics, "final_equity": final_equity}
+    return {"equity_curve": equity_curve, "trades": trades,
+            "metrics": metrics, "final_equity": final_equity}
 
 
 def _metrics(equity_curve, trades, initial_cash, final_equity, bars) -> dict:
@@ -70,7 +79,8 @@ def _metrics(equity_curve, trades, initial_cash, final_equity, bars) -> dict:
         if sd > 0:
             sharpe = (mean(rets) / sd) * math.sqrt(len(rets))
 
-    wins = [t for t in trades if t["pnl"] > 0]
+    wins = [t for t in trades if (t.get("pnl") or 0) > 0]
+    closed = [t for t in trades if t.get("pnl") is not None]
     buy_hold = (bars[-1]["close"] / bars[0]["close"] - 1.0) if len(bars) >= 2 else 0.0
 
     return {
@@ -78,7 +88,7 @@ def _metrics(equity_curve, trades, initial_cash, final_equity, bars) -> dict:
         "buy_hold_return": buy_hold,
         "max_drawdown": max_dd,
         "sharpe": sharpe,
-        "num_trades": len(trades),
-        "win_rate": (len(wins) / len(trades)) if trades else 0.0,
+        "num_trades": len(closed),
+        "win_rate": (len(wins) / len(closed)) if closed else 0.0,
         "final_equity": final_equity,
     }

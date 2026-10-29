@@ -182,6 +182,7 @@ class Backtest(Base):
     status = Column(String(20), default="pending")  # pending | done | error
     metrics = Column(JSON, nullable=True)
     equity_curve = Column(JSON, nullable=True)
+    trades = Column(JSON, nullable=True)
     error = Column(String(1000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

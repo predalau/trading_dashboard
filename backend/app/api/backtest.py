@@ -142,6 +142,7 @@ async def run_backtest(body: RunRequest, db: Session = Depends(get_db)):
                             fee_bps=body.fee_bps, slippage_bps=body.slippage_bps)
         bt.metrics = result["metrics"]
         bt.equity_curve = result["equity_curve"]
+        bt.trades = result["trades"]
         bt.status = "done"
         db.commit()
         db.refresh(bt)
@@ -163,7 +164,19 @@ def get_backtest(backtest_id: int, db: Session = Depends(get_db)):
     return {"id": bt.id, "strategy_id": bt.strategy_id, "symbol": bt.symbol,
             "timeframe": bt.timeframe, "start_ts": bt.start_ts, "end_ts": bt.end_ts,
             "params": bt.params, "status": bt.status, "metrics": bt.metrics,
-            "equity_curve": bt.equity_curve, "error": bt.error}
+            "equity_curve": bt.equity_curve, "trades": bt.trades, "error": bt.error}
+
+
+@router.get("/{backtest_id}/ohlcv")
+def get_backtest_ohlcv(backtest_id: int, db: Session = Depends(get_db)):
+    """Price bars for a backtest's window (for the entry/exit chart)."""
+    bt = db.query(Backtest).filter(Backtest.id == backtest_id).first()
+    if not bt:
+        raise HTTPException(status_code=404, detail="backtest not found")
+    bars = get_ohlcv(db, bt.symbol, bt.timeframe, bt.start_ts, bt.end_ts)
+    return {"symbol": bt.symbol, "timeframe": bt.timeframe,
+            "bars": [{"ts": b["ts"], "open": b["open"], "high": b["high"],
+                      "low": b["low"], "close": b["close"]} for b in bars]}
 
 
 @router.get("")
