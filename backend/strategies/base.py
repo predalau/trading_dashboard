@@ -14,6 +14,9 @@ class Signal:
 
 
 class Strategy:
+    #: human-friendly name/description (optional; shown in the UI)
+    name: str = ""
+    description: str = ""
     #: default parameters; override per subclass
     params: dict = {}
     #: optional UI/validation hints per param, e.g.

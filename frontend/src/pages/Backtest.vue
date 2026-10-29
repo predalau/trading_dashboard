@@ -9,7 +9,7 @@
             <span class="text-muted text-xs">--strategy</span>
             <select v-model="form.module" class="t-input min-w-[200px]">
               <option v-for="s in strategies" :key="s.module" :value="s.module">
-                {{ s.slug }}{{ s.id == null ? ' (built-in)' : '' }}
+                {{ s.name || s.slug }}{{ s.id == null ? ' (built-in)' : '' }}
               </option>
             </select>
           </label>
@@ -34,8 +34,9 @@
         <!-- Strategy parameters: auto-generated controls -->
         <div v-if="currentSpec.length" class="flex flex-col gap-2 border-t border-term-line pt-3">
           <span class="text-muted text-xs">--params</span>
+          <p v-if="currentStrategy?.description" class="text-muted text-xs -mt-1">{{ currentStrategy.description }}</p>
           <div v-for="p in currentSpec" :key="p.name" class="flex items-center gap-3">
-            <span class="text-xs w-28 shrink-0">{{ p.label || p.name }}</span>
+            <span class="text-xs w-24 shrink-0">{{ p.label || p.name }}</span>
 
             <button
               v-if="p.type === 'bool'"
@@ -58,13 +59,13 @@
                 type="range"
                 :min="p.min" :max="p.max" :step="p.step || 1"
                 v-model.number="form.params[p.name]"
-                class="param-slider flex-1 min-w-[140px]"
+                class="param-slider flex-1 min-w-[220px]"
               />
               <input
                 type="number"
                 :min="p.min" :max="p.max" :step="p.step || 1"
                 v-model.number="form.params[p.name]"
-                class="t-input w-16 text-center shrink-0"
+                class="t-input w-14 text-center shrink-0 px-1"
               />
             </template>
 

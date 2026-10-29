@@ -76,15 +76,24 @@ def list_strategies(db: Session = Depends(get_db)):
         entries.append({"id": None, "slug": slug, "name": slug, "module": module,
                         "params": {}, "description": "built-in strategy"})
 
-    # Attach effective params + a param spec (declared or auto-derived) for the UI
+    # Attach params + param spec; drop built-in modules that aren't Strategy
+    # subclasses (e.g. the indicators helper module).
+    out = []
     for e in entries:
         try:
             strat = load_strategy(e["module"], e["params"])
-            e["params"] = strat.params
-            e["param_spec"] = describe_params(strat)
         except Exception:
-            e["param_spec"] = []
-    return entries
+            if e["id"] is not None:   # keep (possibly broken) DB strategies; drop helpers
+                e["param_spec"] = []
+                out.append(e)
+            continue
+        e["params"] = strat.params
+        e["param_spec"] = describe_params(strat)
+        if e["id"] is None:   # enrich built-ins from the class metadata
+            e["name"] = getattr(strat, "name", "") or e["name"]
+            e["description"] = getattr(strat, "description", "") or e["description"]
+        out.append(e)
+    return out
 
 
 @router.post("/strategies")
