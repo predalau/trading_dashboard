@@ -262,6 +262,41 @@ async def start_sweep(body: SweepRequest, db: Session = Depends(get_db)):
     return {"id": sweep.id, "status": sweep.status}
 
 
+class ComboSweepRequest(BaseModel):
+    lookback: int = 1000
+    max_combos: int = 8000
+    min_trades: int = 3
+    top_n: int = 8
+    subset_min: int = 2
+    subset_max: int = 5
+    weights: list[int] = [1, 2, 3]
+    thresholds: list[float] = [0.3, 0.5, 0.7]
+    symbols: Optional[list[str]] = None
+    timeframes: Optional[list[str]] = None
+
+
+@router.post("/combo-sweep")
+async def start_combo_sweep(body: ComboSweepRequest, db: Session = Depends(get_db)):
+    """Discover ensembles from the best cached single-strategy configs."""
+    import asyncio
+    from app.backtest.optimizer import run_combo_sweep, SYMBOLS, TIMEFRAMES
+
+    sweep = Sweep(status="running", total=0, done=0, score_metric="total_return",
+                  lookback=body.lookback)
+    db.add(sweep)
+    db.commit()
+    db.refresh(sweep)
+
+    asyncio.create_task(run_combo_sweep(
+        sweep.id,
+        body.symbols or SYMBOLS,
+        body.timeframes or TIMEFRAMES,
+        body.lookback, body.max_combos, body.min_trades, body.top_n,
+        body.subset_min, body.subset_max, body.weights, body.thresholds,
+    ))
+    return {"id": sweep.id, "status": sweep.status}
+
+
 @router.get("/sweeps")
 def list_sweeps(limit: int = 5, db: Session = Depends(get_db)):
     rows = db.query(Sweep).order_by(Sweep.id.desc()).limit(min(limit, 20)).all()

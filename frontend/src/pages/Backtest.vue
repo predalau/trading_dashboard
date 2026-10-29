@@ -185,6 +185,9 @@
           <button type="button" class="t-btn justify-start py-3" :disabled="sweepRunning" @click="startSweep">
             {{ sweepRunning ? '$ sweeping…' : '$ ./sweep --all ⏎' }}
           </button>
+          <button type="button" class="t-btn justify-start py-3" :disabled="sweepRunning" @click="startComboSweep">
+            $ ./discover-combos ⏎
+          </button>
           <button v-if="sweepRunning" type="button" class="t-btn-danger py-3 px-4" @click="stopSweep">stop</button>
         </div>
         <p class="text-muted text-xs">
@@ -650,7 +653,34 @@ const sweepPct = computed(() => {
   return Math.round((sweep.value.done / sweep.value.total) * 100)
 })
 
-const paramsStr = (p) => Object.entries(p || {}).map(([k, v]) => `${k}=${v}`).join(' ')
+const paramsStr = (p) => {
+  if (!p) return ''
+  if (Array.isArray(p.components)) {
+    const names = p.components
+      .map((c) => c.module.split('.').pop() + (Number(c.weight) > 1 ? '×' + c.weight : ''))
+      .join('+')
+    return `thr=${p.threshold} · ${names}`
+  }
+  return Object.entries(p).map(([k, v]) => `${k}=${v}`).join(' ')
+}
+
+const startComboSweep = async () => {
+  error.value = ''
+  sweepRunning.value = true
+  sweep.value = null
+  try {
+    const r = await fetch('/trading/api/v1/backtest/combo-sweep', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lookback: sweepOpts.value.lookback, max_combos: sweepOpts.value.max_combos }),
+    })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+    pollSweep(d.id)
+  } catch (e) {
+    error.value = e.message
+    sweepRunning.value = false
+  }
+}
 
 const startSweep = async () => {
   error.value = ''
@@ -700,7 +730,6 @@ const stopSweep = async () => {
 
 // Click a report row -> load that config into the form and run it
 const applyResult = async (cfg) => {
-  form.value.slug = cfg.slug
   form.value.symbol = cfg.symbol
   form.value.timeframe = cfg.timeframe
   form.value.lookback = cfg.lookback
@@ -708,11 +737,26 @@ const applyResult = async (cfg) => {
     enabled: !!cfg.bias.enabled,
     sma_len: cfg.bias.sma_len || 50,
     entry_threshold: cfg.bias.entry_threshold ?? 0,
-    exit_enabled: false,
-    exit_threshold: -0.5,
+    exit_enabled: !!cfg.bias.exit_enabled,
+    exit_threshold: cfg.bias.exit_threshold ?? -0.5,
   }
-  await nextTick()                 // let the slug watcher reset params to defaults
-  form.value.params = { ...cfg.params }
+  if (cfg.module === 'strategies.ensemble') {
+    // pick the saved combo if its slug exists, else the generic "Combine Strategies" entry
+    const match = strategies.value.find((s) => s.slug === cfg.slug && s.module === 'strategies.ensemble')
+    const base = strategies.value.find((s) => s.module === 'strategies.ensemble' && s.id == null)
+    form.value.slug = (match || base)?.slug || cfg.slug
+    await nextTick()                 // slug watcher seeds the combo builder
+    combo.value = {
+      threshold: cfg.params.threshold ?? 0.5,
+      components: (cfg.params.components || []).map((c) => ({
+        module: c.module, weight: Number(c.weight) || 1, params: { ...(c.params || {}) },
+      })),
+    }
+  } else {
+    form.value.slug = cfg.slug
+    await nextTick()                 // slug watcher resets params to defaults
+    form.value.params = { ...cfg.params }
+  }
   await nextTick()
   run()
   window.scrollTo({ top: 0, behavior: 'smooth' })
