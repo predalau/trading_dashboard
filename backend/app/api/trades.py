@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.models import Trade, TradeType, PaperTradingAccount
+from app.services.market_service import MarketService
 from app.services.paper_accounting import (
     realized_pl,
     recompute_current_balance,
@@ -16,6 +17,9 @@ from app.services.paper_accounting import (
 router = APIRouter()
 
 
+# Overridable in tests via app.dependency_overrides.
+def get_market() -> MarketService:
+    return MarketService()
 
 
 class TradeCreate(BaseModel):
@@ -26,6 +30,8 @@ class TradeCreate(BaseModel):
     take_profit: Optional[float] = None
     quantity: float
     notes: Optional[str] = None
+    pending: bool = False              # dashboard orders set this True
+    reference_price: Optional[float] = None  # current market price (to pick trigger direction)
 
 
 class TradeClose(BaseModel):
@@ -38,28 +44,30 @@ class TradeUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-class TradeResponse(BaseModel):
-    id: int
-    symbol: str
-    trade_type: str
-    entry_price: float
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
-    quantity: float
-    exit_price: Optional[float]
-    is_open: bool
-    notes: Optional[str]
-    entry_time: Optional[datetime]
-    created_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
+def _serialize(t: Trade) -> dict:
+    return {
+        "id": t.id,
+        "symbol": t.symbol,
+        "trade_type": t.trade_type.value if hasattr(t.trade_type, "value") else t.trade_type,
+        "entry_price": t.entry_price,
+        "stop_loss": t.stop_loss,
+        "take_profit": t.take_profit,
+        "quantity": t.quantity,
+        "exit_price": t.exit_price,
+        "is_open": t.is_open,
+        "status": t.status,
+        "trigger_above": t.trigger_above,
+        "notes": t.notes,
+        "entry_time": t.entry_time.isoformat() if t.entry_time else None,
+        "created_at": t.created_at.isoformat() if t.created_at else None,
+    }
 
 
 @router.get("/trades/")
 async def get_trades(
     symbol: Optional[str] = None,
     open: Optional[bool] = None,
+    status: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Trade)
@@ -68,63 +76,102 @@ async def get_trades(
         query = query.filter(Trade.symbol == symbol)
     if open is not None:
         query = query.filter(Trade.is_open == open)
+    if status is not None:
+        query = query.filter(Trade.status == status)
 
     trades = query.order_by(Trade.created_at.desc()).all()
-
-    return [
-        {
-            "id": t.id,
-            "symbol": t.symbol,
-            "trade_type": t.trade_type.value if hasattr(t.trade_type, 'value') else t.trade_type,
-            "entry_price": t.entry_price,
-            "stop_loss": t.stop_loss,
-            "take_profit": t.take_profit,
-            "quantity": t.quantity,
-            "exit_price": t.exit_price,
-            "is_open": t.is_open,
-            "notes": t.notes,
-            "entry_time": t.entry_time.isoformat() if t.entry_time else None,
-            "created_at": t.created_at.isoformat() if t.created_at else None,
-        }
-        for t in trades
-    ]
+    return [_serialize(t) for t in trades]
 
 
 @router.post("/trades/")
-async def create_trade(trade: TradeCreate, db: Session = Depends(get_db)):
-    # Use (or lazily create) the default paper account.
+async def create_trade(trade: TradeCreate, db: Session = Depends(get_db),
+                       market: MarketService = Depends(get_market)):
     from app.services.account_service import get_or_create_default_account
     account = get_or_create_default_account(db)
 
-    try:
-        new_trade = open_paper_position(
-            db,
-            account,
+    # Pending (limit/stop) order: record it resting; do NOT open or reserve margin.
+    if trade.pending:
+        ref = trade.reference_price
+        if ref is None:
+            try:
+                ref = (await market.get_price(trade.symbol))["price"]
+            except Exception:
+                raise HTTPException(status_code=400, detail="could not determine market price for trigger")
+        new_trade = Trade(
+            account_id=account.id,
             symbol=trade.symbol,
-            side=trade.trade_type,
-            quantity=trade.quantity,
-            price=trade.entry_price,
+            exchange="BINANCE",
+            trade_type=trade.trade_type,
+            entry_price=trade.entry_price,
             stop_loss=trade.stop_loss,
             take_profit=trade.take_profit,
+            quantity=trade.quantity,
             notes=trade.notes,
+            is_open=False,
+            status="pending",
+            trigger_above=trade.entry_price > ref,
         )
+        db.add(new_trade)
+        db.commit()
+        db.refresh(new_trade)
+        return _serialize(new_trade)
+
+    # Immediate open (default; used by non-pending callers).
+    try:
+        new_trade = open_paper_position(
+            db, account,
+            symbol=trade.symbol, side=trade.trade_type, quantity=trade.quantity,
+            price=trade.entry_price, stop_loss=trade.stop_loss,
+            take_profit=trade.take_profit, notes=trade.notes,
+        )
+        new_trade.status = "open"
     except InsufficientBalance as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
     db.commit()
     db.refresh(new_trade)
+    return _serialize(new_trade)
 
-    return {
-        "id": new_trade.id,
-        "symbol": new_trade.symbol,
-        "trade_type": new_trade.trade_type.value if hasattr(new_trade.trade_type, 'value') else new_trade.trade_type,
-        "entry_price": new_trade.entry_price,
-        "stop_loss": new_trade.stop_loss,
-        "take_profit": new_trade.take_profit,
-        "quantity": new_trade.quantity,
-        "is_open": new_trade.is_open,
-        "notes": new_trade.notes,
-    }
+
+@router.post("/trades/{trade_id}/activate")
+async def activate_trade(trade_id: int, db: Session = Depends(get_db),
+                         market: MarketService = Depends(get_market)):
+    """Open a pending order if the live price has touched its entry level.
+
+    Authoritative: the price is fetched server-side and the trigger re-verified,
+    so a client cannot force a fill at the wrong price.
+    """
+    trade = db.query(Trade).filter(Trade.id == trade_id).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if trade.status != "pending":
+        raise HTTPException(status_code=409, detail=f"order is not pending (status={trade.status})")
+
+    try:
+        price = (await market.get_price(trade.symbol))["price"]
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"price unavailable: {exc}")
+
+    reached = (price >= trade.entry_price) if trade.trigger_above else (price <= trade.entry_price)
+    if not reached:
+        raise HTTPException(status_code=400, detail="trigger price not reached")
+
+    account = db.query(PaperTradingAccount).filter(PaperTradingAccount.id == trade.account_id).first()
+    cost = trade.entry_price * trade.quantity
+    if not account or cost > account.available_balance:
+        trade.status = "cancelled"
+        db.commit()
+        raise HTTPException(status_code=400, detail="insufficient balance at fill; order cancelled")
+
+    account.available_balance -= cost
+    trade.is_open = True
+    trade.status = "open"
+    trade.entry_time = datetime.utcnow()
+    db.flush()
+    recompute_current_balance(db, account)
+    db.commit()
+    db.refresh(trade)
+    return _serialize(trade)
 
 
 @router.patch("/trades/{trade_id}")
@@ -142,18 +189,7 @@ async def update_trade(trade_id: int, update: TradeUpdate, db: Session = Depends
 
     db.commit()
     db.refresh(trade)
-
-    return {
-        "id": trade.id,
-        "symbol": trade.symbol,
-        "trade_type": trade.trade_type.value if hasattr(trade.trade_type, 'value') else trade.trade_type,
-        "entry_price": trade.entry_price,
-        "stop_loss": trade.stop_loss,
-        "take_profit": trade.take_profit,
-        "quantity": trade.quantity,
-        "is_open": trade.is_open,
-        "notes": trade.notes,
-    }
+    return _serialize(trade)
 
 
 @router.delete("/trades/{trade_id}")
@@ -162,7 +198,15 @@ async def close_trade(trade_id: int, body: Optional[TradeClose] = None, db: Sess
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 
+    # Cancelling a resting pending order: no position was ever opened, no margin held.
+    if trade.status == "pending":
+        trade.status = "cancelled"
+        trade.is_open = False
+        db.commit()
+        return {"message": "Order cancelled", "id": trade_id, "profit_loss": None}
+
     trade.is_open = False
+    trade.status = "closed"
     trade.exit_time = datetime.utcnow()
 
     if body and body.exit_price is not None:
@@ -181,5 +225,4 @@ async def close_trade(trade_id: int, body: Optional[TradeClose] = None, db: Sess
         recompute_current_balance(db, account)
 
     db.commit()
-
     return {"message": "Trade closed", "id": trade_id, "profit_loss": trade.profit_loss}

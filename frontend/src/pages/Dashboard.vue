@@ -178,7 +178,7 @@
         </span>
       </template>
       <div v-if="openTrades.length === 0" class="px-3.5 py-4 text-muted">
-        no running positions on {{ selectedLabel }}
+        no running positions
       </div>
       <div v-else class="overflow-x-auto">
         <table class="t-table">
@@ -229,6 +229,60 @@
         </table>
       </div>
     </TermPanel>
+
+    <!-- Pending Orders (resting limit/stop entries) -->
+    <TermPanel title="pending --orders" tone="surface" flush>
+      <template #meta>
+        <span>{{ pendingOrders.length }} resting</span>
+      </template>
+      <div v-if="pendingOrders.length === 0" class="px-3.5 py-4 text-muted">
+        no pending orders — new orders rest here until price hits the entry level
+      </div>
+      <div v-else class="overflow-x-auto">
+        <table class="t-table">
+          <thead>
+            <tr>
+              <th>OID</th>
+              <th>Symbol</th>
+              <th>Side</th>
+              <th>Entry</th>
+              <th>Trigger</th>
+              <th>Mark</th>
+              <th>SL</th>
+              <th>TP</th>
+              <th>Qty</th>
+              <th><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="order in pendingOrders" :key="order.id">
+              <td class="text-muted">{{ formatPid(order.id) }}</td>
+              <td>{{ order.symbol }}</td>
+              <td :class="order.trade_type === 'BUY' ? 'text-up' : 'text-down'">
+                {{ order.trade_type === 'BUY' ? 'LONG' : 'SHORT' }}
+              </td>
+              <td>{{ formatPrice(order.entry_price) }}</td>
+              <td class="text-muted">{{ order.trigger_above ? '≥' : '≤' }} {{ formatPrice(order.entry_price) }}</td>
+              <td>{{ currentPrices[order.symbol] ? formatPrice(currentPrices[order.symbol]) : '--' }}</td>
+              <td class="text-down">{{ order.stop_loss ? formatPrice(order.stop_loss) : '--' }}</td>
+              <td class="text-tp">{{ order.take_profit ? formatPrice(order.take_profit) : '--' }}</td>
+              <td>{{ order.quantity }}</td>
+              <td>
+                <button
+                  v-if="confirmKill !== 'o' + order.id"
+                  @click="confirmKill = 'o' + order.id"
+                  class="t-btn-danger"
+                >cancel</button>
+                <span v-else class="inline-flex gap-1.5">
+                  <button @click="confirmKill = null; closeTrade(order.id)" class="t-btn-danger">confirm</button>
+                  <button @click="confirmKill = null" class="t-btn-ghost px-2.5 py-1.5">esc</button>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </TermPanel>
   </div>
 </template>
 
@@ -258,9 +312,11 @@ const dropdownOpen = ref(false)
 
 // Trade management
 const openTrades = ref([])
+const pendingOrders = ref([])
 const currentPrices = reactive({})
 const tradeTickerUnsubs = ref([])
 const closingTrades = new Set() // Prevent double-close
+const activatingOrders = new Set() // Prevent double-activate
 const clickMode = ref(null)
 const tradeForm = ref({
   trade_type: 'BUY',
@@ -465,6 +521,40 @@ const handleTradeTickerUpdate = (tickerData) => {
       closeTrade(trade.id, price)
     }
   }
+
+  // Trigger pending (limit/stop) entry orders that touch their entry level
+  for (const order of pendingOrders.value) {
+    if (order.symbol !== symbol || activatingOrders.has(order.id)) continue
+    const reached = order.trigger_above ? price >= order.entry_price : price <= order.entry_price
+    if (reached) {
+      activatingOrders.add(order.id)
+      log.push('FILL', `${order.symbol} order ${formatPid(order.id)} triggered @ ${price}`)
+      activateOrder(order.id)
+    }
+  }
+}
+
+/**
+ * Activate a pending order (backend re-verifies the live price before opening).
+ */
+const activateOrder = async (orderId) => {
+  try {
+    const r = await fetch(`/trading/api/v1/trades/${orderId}/activate`, { method: 'POST' })
+    if (r.ok) {
+      log.push('FILL', `opened position ${formatPid(orderId)}`)
+      await fetchTrades()
+      return
+    }
+    const d = await r.json().catch(() => ({}))
+    if (/cancelled/i.test(d.detail || '')) {
+      log.push('WARN', `order ${formatPid(orderId)} cancelled: ${d.detail}`)
+      pendingOrders.value = pendingOrders.value.filter(o => o.id !== orderId)
+    }
+  } catch (err) {
+    console.error('Activate order failed:', err)
+  } finally {
+    activatingOrders.delete(orderId)
+  }
 }
 
 /**
@@ -475,8 +565,11 @@ const subscribeToTradeTickers = async () => {
   tradeTickerUnsubs.value.forEach(unsub => unsub())
   tradeTickerUnsubs.value = []
 
-  // Get unique symbols from open trades (excluding selectedSymbol which is already subscribed)
-  const symbols = [...new Set(openTrades.value.map(t => t.symbol))]
+  // Get unique symbols from open trades + pending orders (all symbols)
+  const symbols = [...new Set([
+    ...openTrades.value.map(t => t.symbol),
+    ...pendingOrders.value.map(o => o.symbol),
+  ])]
 
   if (!binanceWS.getStatus().connected) {
     try {
@@ -494,13 +587,16 @@ const subscribeToTradeTickers = async () => {
 }
 
 /**
- * Fetch open trades for the selected symbol
+ * Fetch open positions (all symbols) and resting pending orders.
  */
 const fetchTrades = async () => {
   try {
-    const response = await fetch(`/trading/api/v1/trades/?symbol=${selectedSymbol.value}&open=true`)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    openTrades.value = await response.json()
+    const [openRes, pendRes] = await Promise.all([
+      fetch('/trading/api/v1/trades/?open=true'),
+      fetch('/trading/api/v1/trades/?status=pending'),
+    ])
+    if (openRes.ok) openTrades.value = (await openRes.json()).filter(t => t.status === 'open')
+    if (pendRes.ok) pendingOrders.value = await pendRes.json()
     await subscribeToTradeTickers()
   } catch (err) {
     console.error('Failed to fetch trades:', err)
@@ -512,6 +608,7 @@ const fetchTrades = async () => {
  */
 const submitTrade = async () => {
   try {
+    const referencePrice = symbolTicker.value?.price ?? currentPrices[selectedSymbol.value] ?? null
     const response = await fetch('/trading/api/v1/trades/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -522,18 +619,20 @@ const submitTrade = async () => {
         stop_loss: tradeForm.value.stop_loss || null,
         take_profit: tradeForm.value.take_profit || null,
         quantity: tradeForm.value.quantity,
+        pending: true,
+        reference_price: referencePrice,
       })
     })
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
     const f = tradeForm.value
-    log.push('FILL', `${f.trade_type === 'BUY' ? 'LONG' : 'SHORT'} ${f.quantity} ${selectedSymbol.value} @ ${f.entry_price}`)
+    log.push('ORDER', `${f.trade_type === 'BUY' ? 'LONG' : 'SHORT'} ${f.quantity} ${selectedSymbol.value} pending @ ${f.entry_price}`)
     if (f.stop_loss || f.take_profit) {
       log.push('SET', `TP ${f.take_profit || '--'} · SL ${f.stop_loss || '--'}`)
     }
 
-    // Reset form and refresh trades
+    // Reset form and refresh trades/orders
     tradeForm.value = { trade_type: 'BUY', entry_price: null, stop_loss: null, take_profit: null, quantity: null }
     await fetchTrades()
   } catch (err) {

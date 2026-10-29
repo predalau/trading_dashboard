@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS trades (
     profit_loss DECIMAL(20, 8),
     profit_loss_percentage DECIMAL(10, 4),
     is_open BOOLEAN DEFAULT true,
+    status VARCHAR(20) NOT NULL DEFAULT 'open',
+    trigger_above BOOLEAN,
     planned_rr_ratio DECIMAL(10, 2),
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

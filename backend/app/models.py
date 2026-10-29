@@ -60,6 +60,8 @@ class Trade(Base):
     profit_loss = Column(Float, nullable=True)
     profit_loss_percentage = Column(Float, nullable=True)
     is_open = Column(Boolean, default=True)
+    status = Column(String(20), nullable=False, default="open")  # pending | open | closed | cancelled
+    trigger_above = Column(Boolean, nullable=True)  # pending entry fills when price >= entry (True) / <= entry (False)
     planned_rr_ratio = Column(Float, nullable=True)
     notes = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
