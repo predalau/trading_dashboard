@@ -192,7 +192,7 @@ const loadChartData = async () => {
     error.value = null
 
     // Render trade positions and setup click handler
-    renderTradeLines()
+    renderTrades()
     setupClickHandler()
     setupHistoryLoader()
   } catch (err) {
@@ -240,7 +240,7 @@ const loadOlderHistory = async () => {
       const added = older.length
       chart.timeScale().setVisibleLogicalRange({ from: range.from + added, to: range.to + added })
     }
-    renderTradeLines()
+    renderTrades()
     if (older.length < HISTORY_LIMIT) noMoreHistory = true
   } catch (err) {
     console.error('History load error:', err)
@@ -309,8 +309,18 @@ const handleTradeUpdate = (trade) => {
 }
 
 /**
- * Render trade positions as price lines on the chart
+ * Render trade levels (price lines) and entry/exit markers on the chart.
  */
+const fmtP = (p) => '$' + Number(p).toFixed(2)
+
+// Parse a server timestamp as UTC (naive isoformat has no offset) -> unix seconds
+const toSec = (iso) => {
+  if (!iso) return null
+  const s = /[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z'
+  const ms = Date.parse(s)
+  return Number.isNaN(ms) ? null : Math.floor(ms / 1000)
+}
+
 const renderTradeLines = () => {
   if (!candleSeries) return
 
@@ -320,18 +330,19 @@ const renderTradeLines = () => {
   })
   priceLines = []
 
-  // Draw lines for each trade
+  // Draw level lines for open positions and resting (pending) orders
   for (const trade of props.trades) {
-    if (!trade.is_open) continue
+    const isPending = trade.status === 'pending'
+    if (!trade.is_open && !isPending) continue
 
-    // Entry line
+    // Entry level (solid for open positions, dashed for resting orders)
     const entryLine = candleSeries.createPriceLine({
       price: trade.entry_price,
-      color: token('--text'),
+      color: isPending ? token('--muted') : token('--text'),
       lineWidth: 1,
-      lineStyle: 1, // Dotted
+      lineStyle: isPending ? 2 : 1,
       axisLabelVisible: true,
-      title: `Entry ${trade.trade_type === 'BUY' ? '▲' : '▼'} $${trade.entry_price.toFixed(2)}`,
+      title: `${isPending ? 'Order' : 'Entry'} ${trade.trade_type === 'BUY' ? '▲' : '▼'} ${fmtP(trade.entry_price)}`,
     })
     priceLines.push(entryLine)
 
@@ -343,7 +354,7 @@ const renderTradeLines = () => {
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
-        title: `SL $${trade.stop_loss.toFixed(2)}`,
+        title: `SL ${fmtP(trade.stop_loss)}`,
       })
       priceLines.push(slLine)
     }
@@ -356,11 +367,54 @@ const renderTradeLines = () => {
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
-        title: `TP $${trade.take_profit.toFixed(2)}`,
+        title: `TP ${fmtP(trade.take_profit)}`,
       })
       priceLines.push(tpLine)
     }
   }
+}
+
+/**
+ * Place entry/exit markers on the time axis for this symbol's trades.
+ */
+const renderTradeMarkers = () => {
+  if (!candleSeries) return
+  const markers = []
+  for (const t of props.trades) {
+    if (t.status === 'pending' || t.status === 'cancelled') continue
+
+    // Entry marker (arrow in the trade direction)
+    const et = toSec(t.entry_time || t.created_at)
+    if (et) {
+      markers.push({
+        time: et,
+        position: t.trade_type === 'BUY' ? 'belowBar' : 'aboveBar',
+        color: t.trade_type === 'BUY' ? token('--up') : token('--down'),
+        shape: t.trade_type === 'BUY' ? 'arrowUp' : 'arrowDown',
+        text: `${t.trade_type === 'BUY' ? 'LONG' : 'SHORT'} ${fmtP(t.entry_price)}`,
+      })
+    }
+
+    // Exit marker (square, colored by P&L)
+    const xt = toSec(t.exit_time)
+    if (xt && t.exit_price != null) {
+      const win = (t.profit_loss || 0) >= 0
+      markers.push({
+        time: xt,
+        position: t.trade_type === 'BUY' ? 'aboveBar' : 'belowBar',
+        color: win ? token('--up') : token('--down'),
+        shape: 'square',
+        text: `EXIT ${fmtP(t.exit_price)}`,
+      })
+    }
+  }
+  markers.sort((a, b) => a.time - b.time)
+  try { candleSeries.setMarkers(markers) } catch (err) { console.error('Marker error:', err) }
+}
+
+const renderTrades = () => {
+  renderTradeLines()
+  renderTradeMarkers()
 }
 
 /**
@@ -436,9 +490,9 @@ watch(() => props.interval, () => {
   initChart()
 })
 
-// Re-render trade lines when trades change
+// Re-render trade lines + markers when trades change
 watch(() => props.trades, () => {
-  renderTradeLines()
+  renderTrades()
 }, { deep: true })
 </script>
 

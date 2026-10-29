@@ -92,7 +92,7 @@
           <ChartComponent
             :symbol="selectedSymbol"
             :interval="selectedTimeframe"
-            :trades="openTrades"
+            :trades="chartTrades"
             :clickMode="clickMode"
             @chart-click="handleChartClick"
           />
@@ -313,10 +313,18 @@ const dropdownOpen = ref(false)
 // Trade management
 const openTrades = ref([])
 const pendingOrders = ref([])
+const closedTrades = ref([])
 const currentPrices = reactive({})
 const tradeTickerUnsubs = ref([])
 const closingTrades = new Set() // Prevent double-close
 const activatingOrders = new Set() // Prevent double-activate
+
+// Trades shown on the chart: only the charted symbol (lines + entry/exit markers)
+const chartTrades = computed(() => {
+  const sym = selectedSymbol.value
+  return [...openTrades.value, ...pendingOrders.value, ...closedTrades.value]
+    .filter(t => t.symbol === sym)
+})
 const clickMode = ref(null)
 const tradeForm = ref({
   trade_type: 'BUY',
@@ -591,12 +599,14 @@ const subscribeToTradeTickers = async () => {
  */
 const fetchTrades = async () => {
   try {
-    const [openRes, pendRes] = await Promise.all([
+    const [openRes, pendRes, closedRes] = await Promise.all([
       fetch('/trading/api/v1/trades/?open=true'),
       fetch('/trading/api/v1/trades/?status=pending'),
+      fetch('/trading/api/v1/trades/?status=closed'),
     ])
     if (openRes.ok) openTrades.value = (await openRes.json()).filter(t => t.status === 'open')
     if (pendRes.ok) pendingOrders.value = await pendRes.json()
+    if (closedRes.ok) closedTrades.value = (await closedRes.json()).slice(0, 100)
     await subscribeToTradeTickers()
   } catch (err) {
     console.error('Failed to fetch trades:', err)

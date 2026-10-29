@@ -58,8 +58,10 @@ def _serialize(t: Trade) -> dict:
         "is_open": t.is_open,
         "status": t.status,
         "trigger_above": t.trigger_above,
+        "profit_loss": t.profit_loss,
         "notes": t.notes,
         "entry_time": t.entry_time.isoformat() if t.entry_time else None,
+        "exit_time": t.exit_time.isoformat() if t.exit_time else None,
         "created_at": t.created_at.isoformat() if t.created_at else None,
     }
 

@@ -54,12 +54,14 @@
             </select>
 
             <template v-else-if="p.type === 'int' || p.type === 'float'">
+              <span class="text-muted text-[10px] w-10 text-right shrink-0">{{ p.min }}</span>
               <input
                 type="range"
                 :min="p.min" :max="p.max" :step="p.step || 1"
                 v-model.number="form.params[p.name]"
                 class="flex-1 accent-term-accent"
               />
+              <span class="text-muted text-[10px] w-10 shrink-0">{{ p.max }}</span>
               <input
                 type="number"
                 :min="p.min" :max="p.max" :step="p.step || 1"
