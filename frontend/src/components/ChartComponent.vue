@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full h-96 relative">
+  <div class="w-full relative chart-fill">
     <!-- Chart Container (always in DOM) -->
     <div
       ref="chartContainer"
@@ -46,6 +46,12 @@ let wsUnsubscribe = null
 let historicalData = []
 let resizeObserver = null
 let priceLines = [] // Track active price lines for cleanup
+
+// Historical lazy-loading (older candles when zooming/scrolling left)
+const HISTORY_LIMIT = 500
+let isLoadingHistory = false
+let noMoreHistory = false
+let historyRangeHandler = null
 
 /**
  * Create and size the chart
@@ -130,9 +136,13 @@ const loadChartData = async () => {
   }
 
   try {
+    // Reset history pagination state for this symbol/interval
+    isLoadingHistory = false
+    noMoreHistory = false
+
     // Fetch initial candles via REST
     const response = await fetch(
-      `/trading/api/v1/market/klines/${props.symbol}?interval=${props.interval}&limit=100`
+      `/trading/api/v1/market/klines/${props.symbol}?interval=${props.interval}&limit=${HISTORY_LIMIT}`
     )
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -184,9 +194,58 @@ const loadChartData = async () => {
     // Render trade positions and setup click handler
     renderTradeLines()
     setupClickHandler()
+    setupHistoryLoader()
   } catch (err) {
     console.error('Chart data error:', err)
     error.value = err.message || 'Failed to load chart data'
+  }
+}
+
+/**
+ * Lazy-load older candles when the user scrolls/zooms toward the left edge.
+ */
+const setupHistoryLoader = () => {
+  if (!chart) return
+  historyRangeHandler = () => {
+    if (!candleSeries || isLoadingHistory || noMoreHistory) return
+    const lr = chart.timeScale().getVisibleLogicalRange()
+    if (!lr) return
+    const bars = candleSeries.barsInLogicalRange(lr)
+    if (bars && bars.barsBefore < 10) loadOlderHistory()
+  }
+  chart.timeScale().subscribeVisibleLogicalRangeChange(historyRangeHandler)
+}
+
+const loadOlderHistory = async () => {
+  if (isLoadingHistory || noMoreHistory || historicalData.length === 0) return
+  isLoadingHistory = true
+  try {
+    const oldest = historicalData[0].time // seconds
+    const endMs = oldest * 1000 - 1
+    const resp = await fetch(
+      `/trading/api/v1/market/klines/${props.symbol}?interval=${props.interval}&limit=${HISTORY_LIMIT}&end_time=${endMs}`
+    )
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const data = await resp.json()
+    const older = (data.klines || [])
+      .map(k => ({ time: k.time, open: k.open, high: k.high, low: k.low, close: k.close }))
+      .filter(c => c.time < oldest)
+    if (older.length === 0) { noMoreHistory = true; return }
+
+    // Preserve the current view across the setData (shift by bars prepended)
+    const range = chart.timeScale().getVisibleLogicalRange()
+    historicalData = older.concat(historicalData)
+    candleSeries.setData(historicalData)
+    if (range) {
+      const added = older.length
+      chart.timeScale().setVisibleLogicalRange({ from: range.from + added, to: range.to + added })
+    }
+    renderTradeLines()
+    if (older.length < HISTORY_LIMIT) noMoreHistory = true
+  } catch (err) {
+    console.error('History load error:', err)
+  } finally {
+    isLoadingHistory = false
   }
 }
 
@@ -356,6 +415,10 @@ const initChart = async () => {
 const cleanup = () => {
   if (wsUnsubscribe) wsUnsubscribe()
   if (resizeObserver) resizeObserver.disconnect()
+  if (chart && historyRangeHandler) {
+    try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(historyRangeHandler) } catch {}
+  }
+  historyRangeHandler = null
   if (chart) chart.remove()
 }
 
@@ -380,6 +443,11 @@ watch(() => props.trades, () => {
 </script>
 
 <style scoped>
+.chart-fill {
+  height: 100%;
+  min-height: 420px;
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;

@@ -56,25 +56,26 @@ class MarketService:
         symbol: str,
         interval: str = "1h",
         limit: int = 100,
-        exchange: str = "BINANCE"
+        exchange: str = "BINANCE",
+        end_time: int | None = None,
     ) -> List[dict]:
         """Get candlestick data"""
         if exchange.upper() == "BINANCE":
-            return await self._get_binance_klines(symbol, interval, limit)
+            return await self._get_binance_klines(symbol, interval, limit, end_time)
         else:
             raise ValueError(f"Unsupported exchange: {exchange}")
 
-    async def _get_binance_klines(self, symbol: str, interval: str, limit: int) -> List[dict]:
+    async def _get_binance_klines(self, symbol: str, interval: str, limit: int,
+                                  end_time: int | None = None) -> List[dict]:
         """Get klines from Binance"""
         try:
+            params = {"symbol": symbol, "interval": interval, "limit": limit}
+            if end_time is not None:
+                params["endTime"] = end_time
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{self.BINANCE_BASE_URL}/klines",
-                    params={
-                        "symbol": symbol,
-                        "interval": interval,
-                        "limit": limit
-                    }
+                    params=params,
                 )
                 response.raise_for_status()
                 klines = response.json()

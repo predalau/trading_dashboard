@@ -310,10 +310,14 @@ const isRealTrading = inject('isRealTrading')
 const log = useLogStore()
 
 const timeframes = [
+  { label: '1m', value: '1m' },
+  { label: '5m', value: '5m' },
+  { label: '15m', value: '15m' },
+  { label: '30m', value: '30m' },
   { label: '1h', value: '1h' },
   { label: '4h', value: '4h' },
   { label: '1d', value: '1d' },
-  { label: '1w', value: '1w' }
+  { label: '1w', value: '1w' },
 ]
 
 // 24h ticker for the selected pair, shown in the chart header
@@ -604,6 +608,24 @@ onUnmounted(() => {
 <style scoped>
 .chart-panel {
   flex: 999 1 640px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* TermPanel body (flush) fills the stretched panel height... */
+.chart-panel :deep(> div) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ...and the chart wrapper (last child, after the controls bar) grows to fill */
+.chart-panel :deep(> div > div:last-child) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
 }
 
 .side-column {

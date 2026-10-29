@@ -57,13 +57,19 @@ async def get_klines(
     symbol: str,
     interval: str = "1h",
     limit: int = 100,
-    exchange: str = "BINANCE"
+    exchange: str = "BINANCE",
+    end_time: Optional[int] = None,
 ):
-    """Get candlestick data for a symbol"""
+    """Get candlestick data for a symbol.
+
+    `limit` is clamped to Binance's max (1000). `end_time` (ms epoch) pages
+    backwards in history (used by the chart when zooming out).
+    """
     market_service = MarketService()
+    limit = max(1, min(limit, 1000))
 
     try:
-        klines = await market_service.get_klines(symbol, interval, limit, exchange)
+        klines = await market_service.get_klines(symbol, interval, limit, exchange, end_time)
         return {
             "symbol": symbol,
             "interval": interval,
