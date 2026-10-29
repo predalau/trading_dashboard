@@ -13,6 +13,7 @@ from app.services.paper_accounting import (
     open_paper_position,
     InsufficientBalance,
 )
+from app.services.pending_orders import trigger_reached, fill_pending_trade, process_pending_orders
 
 router = APIRouter()
 
@@ -156,22 +157,22 @@ async def activate_trade(trade_id: int, db: Session = Depends(get_db),
     if not reached:
         raise HTTPException(status_code=400, detail="trigger price not reached")
 
-    account = db.query(PaperTradingAccount).filter(PaperTradingAccount.id == trade.account_id).first()
-    cost = trade.entry_price * trade.quantity
-    if not account or cost > account.available_balance:
-        trade.status = "cancelled"
-        db.commit()
-        raise HTTPException(status_code=400, detail="insufficient balance at fill; order cancelled")
-
-    account.available_balance -= cost
-    trade.is_open = True
-    trade.status = "open"
-    trade.entry_time = datetime.utcnow()
-    db.flush()
-    recompute_current_balance(db, account)
+    result = fill_pending_trade(db, trade, price)
     db.commit()
     db.refresh(trade)
+    if result == "cancelled":
+        raise HTTPException(status_code=400, detail="insufficient balance at fill; order cancelled")
     return _serialize(trade)
+
+
+@router.post("/trades/process-pending")
+async def process_pending(db: Session = Depends(get_db),
+                          market: MarketService = Depends(get_market)):
+    """Check all resting pending orders against live prices and fill/cancel them.
+
+    Called by the in-process poller (unattended) and available for manual/cron use.
+    """
+    return await process_pending_orders(db, market)
 
 
 @router.patch("/trades/{trade_id}")

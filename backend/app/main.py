@@ -62,6 +62,38 @@ def _bootstrap_default_account():
         db.close()
 
 
+@app.on_event("startup")
+async def _start_pending_order_poller():
+    """Background watcher: fill pending (limit/stop) orders even with no browser open.
+
+    Polls every PENDING_POLL_SEC seconds (0 disables). Does not fire during unit
+    tests, which instantiate the app without the startup lifecycle.
+    """
+    import asyncio
+    import os
+
+    interval = int(os.getenv("PENDING_POLL_SEC", "15"))
+    if interval <= 0:
+        return
+
+    async def _loop():
+        from app.services.market_service import MarketService
+        from app.services.pending_orders import process_pending_orders
+        while True:
+            await asyncio.sleep(interval)
+            db = SessionLocal()
+            try:
+                result = await process_pending_orders(db, MarketService())
+                if result.get("filled") or result.get("cancelled"):
+                    logger.info(f"pending poller: {result}")
+            except Exception as exc:
+                logger.warning(f"pending poller error: {exc}")
+            finally:
+                db.close()
+
+    asyncio.create_task(_loop())
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
