@@ -18,8 +18,8 @@ from app.backtest.param_spec import describe_params
 from app.backtest.trend_bias import build_bias_series, higher_timeframes
 from app.database import get_db
 from app.deps.auth import get_api_key, require_scope
-from app.models import ApiKey, Backtest, StrategyDef, Sweep, SweepResult
-from app.services.ohlcv_service import INTERVAL_MS, backfill, get_ohlcv
+from app.models import ApiKey, Backtest, SavedConfig, StrategyDef, Sweep, SweepResult
+from app.services.ohlcv_service import INTERVAL_MS, backfill, ensure_ohlcv, get_ohlcv
 from app.services.strategy_authoring import StrategyValidationError, create_strategy
 
 router = APIRouter()
@@ -196,10 +196,7 @@ async def run_backtest(body: RunRequest, db: Session = Depends(get_db)):
     db.refresh(bt)
 
     try:
-        bars = get_ohlcv(db, body.symbol, body.timeframe, start_ms, end_ms)
-        if len(bars) < 2:
-            await backfill(db, body.symbol, body.timeframe, start_ms, end_ms)
-            bars = get_ohlcv(db, body.symbol, body.timeframe, start_ms, end_ms)
+        bars = await ensure_ohlcv(db, body.symbol, body.timeframe, start_ms, end_ms)
         if len(bars) < 2:
             raise ValueError("no OHLCV data available for this symbol/timeframe/range")
 
@@ -317,6 +314,66 @@ def query_results(symbol: Optional[str] = None, timeframe: Optional[str] = None,
                    "lookback": r.lookback, "bias": r.bias or {"enabled": False}},
         "metrics": r.metrics, "score": r.score,
     } for r in rows]
+
+
+def _ser_saved(sc: SavedConfig) -> dict:
+    return {"id": sc.id, "name": sc.name, "module": sc.module, "slug": sc.slug,
+            "params": sc.params or {}, "symbol": sc.symbol, "timeframe": sc.timeframe,
+            "lookback": sc.lookback, "bias": sc.bias or {"enabled": False},
+            "created_at": sc.created_at.isoformat() if sc.created_at else None}
+
+
+class SavedConfigCreate(BaseModel):
+    name: str
+    module: str
+    slug: Optional[str] = None
+    params: dict = {}
+    symbol: str = "BTCUSDT"
+    timeframe: str = "1h"
+    lookback: int = 500
+    bias: dict = {"enabled": False}
+
+
+@router.post("/saved-configs")
+def save_config(body: SavedConfigCreate, db: Session = Depends(get_db)):
+    """Create or overwrite (by name) a reusable backtest configuration."""
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name required")
+    try:
+        load_strategy(body.module, body.params)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"invalid config: {exc}")
+    sc = db.query(SavedConfig).filter(SavedConfig.name == name).first()
+    if sc is None:
+        sc = SavedConfig(name=name)
+        db.add(sc)
+    sc.module = body.module
+    sc.slug = body.slug or body.module.split(".")[-1]
+    sc.params = body.params
+    sc.symbol = body.symbol
+    sc.timeframe = body.timeframe
+    sc.lookback = body.lookback
+    sc.bias = body.bias
+    db.commit()
+    db.refresh(sc)
+    return _ser_saved(sc)
+
+
+@router.get("/saved-configs")
+def list_saved_configs(db: Session = Depends(get_db)):
+    rows = db.query(SavedConfig).order_by(SavedConfig.id.desc()).all()
+    return [_ser_saved(s) for s in rows]
+
+
+@router.delete("/saved-configs/{config_id}")
+def delete_saved_config(config_id: int, db: Session = Depends(get_db)):
+    sc = db.query(SavedConfig).filter(SavedConfig.id == config_id).first()
+    if not sc:
+        raise HTTPException(status_code=404, detail="config not found")
+    db.delete(sc)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/{backtest_id}")

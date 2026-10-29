@@ -220,6 +220,22 @@ class SweepResult(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class SavedConfig(Base):
+    """A named, reusable single-strategy backtest configuration (preset)."""
+    __tablename__ = "saved_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(120), unique=True, nullable=False)
+    module = Column(String(150))
+    slug = Column(String(80))
+    params = Column(JSON)
+    symbol = Column(String(50))
+    timeframe = Column(String(10))
+    lookback = Column(Integer)
+    bias = Column(JSON)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class BotHotWallet(Base):
     """Opt-in encrypted hot wallet for unattended bots. DISABLED by default.
 

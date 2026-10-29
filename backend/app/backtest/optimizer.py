@@ -16,7 +16,7 @@ from app.backtest.param_spec import describe_params
 from app.backtest.registry import load_strategy
 from app.backtest.trend_bias import build_bias_series
 from app.models import Sweep, SweepResult
-from app.services.ohlcv_service import INTERVAL_MS, backfill, get_ohlcv
+from app.services.ohlcv_service import INTERVAL_MS, ensure_ohlcv
 
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 TIMEFRAMES = ["15m", "1h", "4h", "1d"]
@@ -141,10 +141,7 @@ async def run_sweep(sweep_id: int, symbols, timeframes, steps, lookback,
                     if bars is None:
                         interval = INTERVAL_MS[tf]
                         start = now - lookback * interval
-                        bars = get_ohlcv(db, sym, tf, start, now)
-                        if len(bars) < min(lookback, 100):
-                            await backfill(db, sym, tf, start, now)
-                            bars = get_ohlcv(db, sym, tf, start, now)
+                        bars = await ensure_ohlcv(db, sym, tf, start, now)
                         bars_cache[(sym, tf)] = bars
                     if len(bars) >= 2:
                         bias_arr, entry_thr = None, -1.0

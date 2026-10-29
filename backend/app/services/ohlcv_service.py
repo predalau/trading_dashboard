@@ -87,3 +87,27 @@ def get_ohlcv(db: Session, symbol: str, timeframe: str,
     rows = q.order_by(OHLCV.ts).all()
     return [{"ts": r.ts, "open": r.open, "high": r.high, "low": r.low,
              "close": r.close, "volume": r.volume} for r in rows]
+
+
+async def ensure_ohlcv(db: Session, symbol: str, timeframe: str,
+                       start_ms: int, end_ms: int,
+                       client: Optional[httpx.AsyncClient] = None) -> list[dict]:
+    """Return bars for [start, end], backfilling any missing head/tail gaps.
+
+    Unlike reading the cache directly, this guarantees the full requested
+    window is fetched from Binance when the cache only partially covers it
+    (e.g. when the lookback is increased from 500 to 10000).
+    """
+    interval = INTERVAL_MS.get(timeframe, 3_600_000)
+    bars = get_ohlcv(db, symbol, timeframe, start_ms, end_ms)
+    if not bars:
+        await backfill(db, symbol, timeframe, start_ms, end_ms, client=client)
+        return get_ohlcv(db, symbol, timeframe, start_ms, end_ms)
+    refetch = False
+    if bars[0]["ts"] - start_ms > interval:        # missing older history
+        await backfill(db, symbol, timeframe, start_ms, bars[0]["ts"], client=client)
+        refetch = True
+    if end_ms - bars[-1]["ts"] > 2 * interval:     # missing recent bars
+        await backfill(db, symbol, timeframe, bars[-1]["ts"], end_ms, client=client)
+        refetch = True
+    return get_ohlcv(db, symbol, timeframe, start_ms, end_ms) if refetch else bars

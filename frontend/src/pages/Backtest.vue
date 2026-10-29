@@ -238,7 +238,7 @@
           <thead>
             <tr>
               <th>#</th><th>strategy</th><th>symbol</th><th>tf</th>
-              <th>params</th><th>bias</th><th>return</th><th>trades</th><th></th>
+              <th>params</th><th>bias</th><th>return</th><th>trades</th><th></th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -253,7 +253,59 @@
               <td class="text-xs">{{ r.config.bias.enabled ? ('≥' + r.config.bias.entry_threshold) : '—' }}</td>
               <td :class="r.score >= 0 ? 'text-up' : 'text-down'">{{ pct(r.score) }}</td>
               <td>{{ r.metrics.num_trades }}</td>
+              <td class="text-muted hover:text-accent text-xs" @click.stop="saveConfigFromRow(r.config)">save</td>
               <td class="text-accent text-xs">run ▸</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </TermPanel>
+
+    <!-- Saved configurations (presets) -->
+    <TermPanel title="saved configs" tone="surface">
+      <template #meta>
+        <button type="button" class="t-btn-ghost text-xs px-2" :disabled="!currentStrategy" @click="saveCurrentConfig">
+          + save current
+        </button>
+      </template>
+      <span v-if="configMsg" class="text-xs text-muted">{{ configMsg }}</span>
+      <div v-if="!savedConfigs.length" class="text-muted text-xs py-2">
+        no saved configs yet — tune a strategy and “save current”, or save a row from the report.
+      </div>
+      <div v-else class="overflow-x-auto">
+        <table class="t-table">
+          <thead>
+            <tr><th>name</th><th>strategy</th><th>symbol</th><th>tf</th><th>params</th><th>bias</th><th></th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in savedConfigs" :key="c.id" class="hover:bg-term-surface">
+              <td>{{ c.name }}</td>
+              <td>{{ c.slug }}</td>
+              <td>{{ c.symbol }}</td>
+              <td>{{ c.timeframe }}</td>
+              <td class="text-muted text-xs">{{ paramsStr(c.params) }}</td>
+              <td class="text-xs">{{ c.bias.enabled ? ('≥' + c.bias.entry_threshold) : '—' }}</td>
+              <td class="text-accent text-xs cursor-pointer" @click="loadConfig(c)">run ▸</td>
+              <td class="text-down text-xs cursor-pointer" @click="deleteSavedConfig(c.id)">✕</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </TermPanel>
+
+    <!-- Sweep history -->
+    <TermPanel title="sweep history" tone="surface">
+      <div v-if="!sweepHistory.length" class="text-muted text-xs py-2">no sweeps run yet.</div>
+      <div v-else class="overflow-x-auto">
+        <table class="t-table">
+          <thead><tr><th>#</th><th>status</th><th>combos</th><th>when</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="s in sweepHistory" :key="s.id" class="hover:bg-term-surface">
+              <td class="text-muted">{{ s.id }}</td>
+              <td :class="s.status === 'done' ? 'text-up' : (s.status === 'running' ? 'text-accent' : 'text-muted')">{{ s.status }}</td>
+              <td>{{ s.done }}/{{ s.total }}</td>
+              <td class="text-muted text-xs">{{ fmtDate(s.created_at) }}</td>
+              <td class="text-accent text-xs cursor-pointer" @click="viewSweep(s.id)">view ▸</td>
             </tr>
           </tbody>
         </table>
@@ -486,7 +538,7 @@ const run = async () => {
   }
 }
 
-onMounted(() => { fetchStrategies(); fetchResults() })
+onMounted(() => { fetchStrategies(); fetchResults(); fetchSavedConfigs(); fetchSweepHistory() })
 onUnmounted(() => { if (sweepPoll) clearInterval(sweepPoll) })
 
 // ---- Report: filterable results over the sweep cache ----
@@ -509,6 +561,83 @@ const fetchResults = async () => {
 }
 const clearReportFilters = () => { reportFilters.value = { symbol: '', timeframe: '', slug: '', bias: '' } }
 watch(reportFilters, fetchResults, { deep: true })
+
+// ---- Saved configs (presets) + sweep history ----
+const savedConfigs = ref([])
+const configMsg = ref('')
+const sweepHistory = ref([])
+const fmtDate = (s) => (s ? new Date(s).toLocaleString() : '')
+
+const fetchSavedConfigs = async () => {
+  try { const r = await fetch('/trading/api/v1/backtest/saved-configs'); if (r.ok) savedConfigs.value = await r.json() } catch (e) { /* ignore */ }
+}
+const fetchSweepHistory = async () => {
+  try { const r = await fetch('/trading/api/v1/backtest/sweeps?limit=20'); if (r.ok) sweepHistory.value = await r.json() } catch (e) { /* ignore */ }
+}
+
+const postConfig = async (payload) => {
+  const r = await fetch('/trading/api/v1/backtest/saved-configs', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+  await fetchSavedConfigs()
+  return d
+}
+
+const saveCurrentConfig = async () => {
+  if (!currentStrategy.value) return
+  const name = window.prompt('Save configuration as:', `${form.value.slug} ${form.value.symbol} ${form.value.timeframe}`)
+  if (!name) return
+  configMsg.value = ''
+  try {
+    await postConfig({
+      name, module: currentStrategy.value.module, slug: form.value.slug,
+      params: buildRunParams(), symbol: form.value.symbol, timeframe: form.value.timeframe,
+      lookback: form.value.lookback, bias: { ...bias.value },
+    })
+    configMsg.value = 'saved ✓'
+  } catch (e) { configMsg.value = e.message }
+}
+
+const saveConfigFromRow = async (cfg) => {
+  const name = window.prompt('Save configuration as:', `${cfg.slug} ${cfg.symbol} ${cfg.timeframe}${cfg.bias.enabled ? ' +bias' : ''}`)
+  if (!name) return
+  try {
+    await postConfig({
+      name, module: cfg.module, slug: cfg.slug, params: cfg.params,
+      symbol: cfg.symbol, timeframe: cfg.timeframe, lookback: cfg.lookback, bias: cfg.bias,
+    })
+  } catch (e) { error.value = e.message }
+}
+
+const loadConfig = async (cfg) => {
+  form.value.slug = cfg.slug
+  form.value.symbol = cfg.symbol
+  form.value.timeframe = cfg.timeframe
+  form.value.lookback = cfg.lookback
+  bias.value = {
+    enabled: !!cfg.bias.enabled, sma_len: cfg.bias.sma_len || 50,
+    entry_threshold: cfg.bias.entry_threshold ?? 0,
+    exit_enabled: !!cfg.bias.exit_enabled, exit_threshold: cfg.bias.exit_threshold ?? -0.5,
+  }
+  await nextTick()
+  if (!isEnsemble.value) form.value.params = { ...cfg.params }
+  await nextTick()
+  run()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const deleteSavedConfig = async (id) => {
+  try { await fetch(`/trading/api/v1/backtest/saved-configs/${id}`, { method: 'DELETE' }); await fetchSavedConfigs() } catch (e) { /* ignore */ }
+}
+
+const viewSweep = async (id) => {
+  try {
+    const d = await (await fetch(`/trading/api/v1/backtest/sweep/${id}`)).json()
+    reportRows.value = d.results || []
+  } catch (e) { /* ignore */ }
+}
 
 // ---- Optimizer sweep + report ----
 const sweepOpts = ref({ grid_steps: 7, max_combos: 4000, lookback: 1000 })
@@ -557,7 +686,8 @@ const pollSweep = (id) => {
       sweep.value = d
       if (d.status !== 'running') {
         clearInterval(sweepPoll); sweepPoll = null; sweepRunning.value = false
-        fetchResults()   // refresh the report with the newly-cached results
+        fetchResults()        // refresh the report with the newly-cached results
+        fetchSweepHistory()   // and the history list
       }
     } catch (e) { /* keep polling */ }
   }, 2000)
