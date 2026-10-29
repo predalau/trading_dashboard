@@ -59,7 +59,8 @@
                 type="number"
                 :min="p.min" :max="p.max" :step="p.step || 1"
                 v-model.number="form.params[p.name]"
-                class="t-input w-16 text-center shrink-0 px-1"
+                class="t-input text-center shrink-0 px-1"
+                style="width: 3.5rem; flex: none"
               />
               <input
                 type="range"
