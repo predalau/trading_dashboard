@@ -16,6 +16,10 @@ class Signal:
 class Strategy:
     #: default parameters; override per subclass
     params: dict = {}
+    #: optional UI/validation hints per param, e.g.
+    #: [{"name": "fast", "label": "fast SMA", "type": "int", "min": 2, "max": 100, "step": 1}]
+    #: If omitted, a spec is auto-derived from `params` defaults.
+    param_spec: list = []
 
     def __init__(self, params: dict | None = None):
         merged = dict(self.__class__.params)

@@ -6,6 +6,10 @@ from strategies.base import Signal, Strategy
 
 class SmaCross(Strategy):
     params = {"fast": 10, "slow": 30}
+    param_spec = [
+        {"name": "fast", "label": "fast SMA", "type": "int", "min": 2, "max": 100, "step": 1},
+        {"name": "slow", "label": "slow SMA", "type": "int", "min": 5, "max": 300, "step": 1},
+    ]
 
     def on_bar(self, i, bars):
         fast = int(self.params["fast"])

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.backtest.engine import run as run_engine
 from app.backtest.registry import load_strategy
+from app.backtest.param_spec import describe_params
 from app.database import get_db
 from app.deps.auth import get_api_key, require_scope
 from app.models import ApiKey, Backtest, StrategyDef
@@ -47,11 +48,43 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _builtin_modules() -> list[str]:
+    """Strategy modules shipped on disk (under the strategies package)."""
+    import pkgutil
+    import strategies
+    return [f"strategies.{m.name}" for m in pkgutil.iter_modules(strategies.__path__)
+            if m.name != "base"]
+
+
 @router.get("/strategies")
 def list_strategies(db: Session = Depends(get_db)):
     rows = db.query(StrategyDef).order_by(StrategyDef.id.desc()).all()
-    return [{"id": s.id, "slug": s.slug, "name": s.name, "module": s.module,
-             "params": s.params, "description": s.description} for s in rows]
+
+    entries = []
+    by_module = {}
+    for s in rows:
+        e = {"id": s.id, "slug": s.slug, "name": s.name, "module": s.module,
+             "params": s.params or {}, "description": s.description}
+        entries.append(e)
+        by_module[s.module] = e
+
+    # Include built-in strategies that have no DB row (e.g. strategies.sma_cross)
+    for module in _builtin_modules():
+        if module in by_module:
+            continue
+        slug = module.split(".")[-1]
+        entries.append({"id": None, "slug": slug, "name": slug, "module": module,
+                        "params": {}, "description": "built-in strategy"})
+
+    # Attach effective params + a param spec (declared or auto-derived) for the UI
+    for e in entries:
+        try:
+            strat = load_strategy(e["module"], e["params"])
+            e["params"] = strat.params
+            e["param_spec"] = describe_params(strat)
+        except Exception:
+            e["param_spec"] = []
+    return entries
 
 
 @router.post("/strategies")

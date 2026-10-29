@@ -8,8 +8,9 @@
           <label class="flex flex-col gap-1">
             <span class="text-muted text-xs">--strategy</span>
             <select v-model="form.module" class="t-input min-w-[200px]">
-              <option value="strategies.sma_cross">strategies.sma_cross</option>
-              <option v-for="s in strategies" :key="s.slug" :value="s.module">{{ s.slug }} ({{ s.module }})</option>
+              <option v-for="s in strategies" :key="s.module" :value="s.module">
+                {{ s.slug }}{{ s.id == null ? ' (built-in)' : '' }}
+              </option>
             </select>
           </label>
           <label class="flex flex-col gap-1">
@@ -29,10 +30,48 @@
             <input v-model.number="form.lookback" type="number" min="50" max="1000" class="t-input w-32" />
           </label>
         </div>
-        <label class="flex flex-col gap-1">
-          <span class="text-muted text-xs">--params (JSON)</span>
-          <input v-model="form.paramsText" class="t-input" placeholder='{"fast": 10, "slow": 30}' />
-        </label>
+
+        <!-- Strategy parameters: auto-generated controls -->
+        <div v-if="currentSpec.length" class="flex flex-col gap-2 border-t border-term-line pt-3">
+          <span class="text-muted text-xs">--params</span>
+          <div v-for="p in currentSpec" :key="p.name" class="flex items-center gap-3">
+            <span class="text-xs w-36 shrink-0">{{ p.label || p.name }}</span>
+
+            <button
+              v-if="p.type === 'bool'"
+              type="button"
+              class="t-btn px-4 py-1.5"
+              :class="form.params[p.name] ? '' : 't-btn-ghost'"
+              @click="form.params[p.name] = !form.params[p.name]"
+            >{{ form.params[p.name] ? 'on' : 'off' }}</button>
+
+            <select
+              v-else-if="p.type === 'choice'"
+              v-model="form.params[p.name]"
+              class="t-input"
+            >
+              <option v-for="c in (p.choices || [])" :key="c" :value="c">{{ c }}</option>
+            </select>
+
+            <template v-else-if="p.type === 'int' || p.type === 'float'">
+              <input
+                type="range"
+                :min="p.min" :max="p.max" :step="p.step || 1"
+                v-model.number="form.params[p.name]"
+                class="flex-1 accent-term-accent"
+              />
+              <input
+                type="number"
+                :min="p.min" :max="p.max" :step="p.step || 1"
+                v-model.number="form.params[p.name]"
+                class="t-input w-24"
+              />
+            </template>
+
+            <input v-else v-model="form.params[p.name]" class="t-input flex-1" />
+          </div>
+        </div>
+
         <div class="flex items-center gap-3">
           <button type="submit" class="t-btn justify-start py-3" :disabled="running">
             {{ running ? '$ running backtest...' : '$ ./backtest --run ⏎' }}
@@ -70,7 +109,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import TermPanel from '../components/term/TermPanel.vue'
 
 const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
@@ -89,8 +128,25 @@ const form = ref({
   symbol: 'BTCUSDT',
   timeframe: '1h',
   lookback: 500,
-  paramsText: '{"fast": 10, "slow": 30}',
+  params: {},
 })
+
+const currentStrategy = computed(() =>
+  strategies.value.find((s) => s.module === form.value.module) || null
+)
+const currentSpec = computed(() => currentStrategy.value?.param_spec || [])
+
+// Seed the params object from the selected strategy's defaults
+const resetParams = () => {
+  const next = {}
+  const defaults = currentStrategy.value?.params || {}
+  for (const p of currentSpec.value) {
+    next[p.name] = defaults[p.name] ?? p.default
+  }
+  form.value.params = next
+}
+
+watch(() => form.value.module, resetParams)
 
 const pct = (x) => (x == null ? '--' : (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%')
 
@@ -124,19 +180,20 @@ const curvePoints = computed(() => {
 const fetchStrategies = async () => {
   try {
     const r = await fetch('/trading/api/v1/backtest/strategies')
-    if (r.ok) strategies.value = await r.json()
+    if (r.ok) {
+      strategies.value = await r.json()
+      // default to sma_cross if present, else first strategy
+      if (!currentStrategy.value && strategies.value.length) {
+        form.value.module = (strategies.value.find((s) => s.module === 'strategies.sma_cross')
+          || strategies.value[0]).module
+      }
+      resetParams()
+    }
   } catch (e) { /* ignore */ }
 }
 
 const run = async () => {
   error.value = ''
-  let params
-  try {
-    params = JSON.parse(form.value.paramsText || '{}')
-  } catch (e) {
-    error.value = 'params is not valid JSON'
-    return
-  }
   running.value = true
   result.value = null
   try {
@@ -148,7 +205,7 @@ const run = async () => {
         symbol: form.value.symbol,
         timeframe: form.value.timeframe,
         lookback: form.value.lookback,
-        params,
+        params: form.value.params,
       }),
     })
     const body = await runRes.json()
