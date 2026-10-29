@@ -7,8 +7,8 @@
         <div class="flex flex-wrap gap-3">
           <label class="flex flex-col gap-1">
             <span class="text-muted text-xs">--strategy</span>
-            <select v-model="form.module" class="t-input min-w-[200px]">
-              <option v-for="s in strategies" :key="s.module" :value="s.module">
+            <select v-model="form.slug" class="t-input min-w-[200px]">
+              <option v-for="s in strategies" :key="s.slug" :value="s.slug">
                 {{ s.name || s.slug }}{{ s.id == null ? ' (built-in)' : '' }}
               </option>
             </select>
@@ -32,7 +32,7 @@
         </div>
 
         <!-- Strategy parameters: auto-generated controls -->
-        <div v-if="currentSpec.length" class="flex flex-col gap-2 border-t border-term-line pt-3">
+        <div v-if="currentSpec.length && !isEnsemble" class="flex flex-col gap-2 border-t border-term-line pt-3">
           <span class="text-muted text-xs">--params</span>
           <p v-if="currentStrategy?.description" class="text-muted text-xs -mt-1">{{ currentStrategy.description }}</p>
           <div v-for="p in currentSpec" :key="p.name" class="flex items-center gap-3">
@@ -71,6 +71,44 @@
             </template>
 
             <input v-else v-model="form.params[p.name]" class="t-input flex-1" />
+          </div>
+        </div>
+
+        <!-- Combine strategies (ensemble) builder -->
+        <div v-if="isEnsemble" class="flex flex-col gap-3 border-t border-term-line pt-3">
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs">--combine</span>
+            <button type="button" class="t-btn-ghost text-xs px-2 py-1" @click="addComponent">+ add strategy</button>
+          </div>
+          <p class="text-muted text-xs -mt-1">Weighted vote — goes long when the weighted long-score ≥ threshold.</p>
+
+          <div v-for="(c, idx) in combo.components" :key="idx" class="flex items-center gap-3">
+            <select v-model="c.module" class="t-input flex-1 min-w-0">
+              <option v-for="s in combinable" :key="s.slug" :value="s.module">{{ s.name || s.slug }}</option>
+            </select>
+            <span class="text-xs text-muted shrink-0">w</span>
+            <input type="number" min="1" max="10" step="1" v-model.number="c.weight"
+                   class="t-input text-center shrink-0 px-1" style="width: 3.5rem; flex: none" />
+            <input type="range" min="1" max="10" step="1" v-model.number="c.weight"
+                   class="param-slider shrink-0" style="width: 120px" />
+            <button type="button" class="t-btn-danger text-xs px-2 py-1 shrink-0" @click="removeComponent(idx)">x</button>
+          </div>
+          <p v-if="!combo.components.length" class="text-muted text-xs">no strategies yet — click “+ add strategy”.</p>
+
+          <div class="flex items-center gap-3">
+            <span class="text-xs w-24 shrink-0">threshold</span>
+            <input type="number" min="0" max="1" step="0.05" v-model.number="combo.threshold"
+                   class="t-input text-center shrink-0 px-1" style="width: 3.5rem; flex: none" />
+            <input type="range" min="0" max="1" step="0.05" v-model.number="combo.threshold"
+                   class="param-slider flex-1 min-w-0" />
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <input v-model="comboName" placeholder="combo name" class="t-input" style="max-width: 220px" />
+            <button type="button" class="t-btn-ghost px-3 py-1.5" :disabled="savingCombo" @click="saveCombo">
+              {{ savingCombo ? 'saving…' : 'save combo' }}
+            </button>
+            <span v-if="comboMsg" class="text-xs" :class="comboErr ? 'text-down' : 'text-up'">{{ comboMsg }}</span>
           </div>
         </div>
 
@@ -137,17 +175,27 @@ const result = ref(null)
 const chartBars = ref([])
 
 const form = ref({
-  module: 'strategies.sma_cross',
+  slug: 'sma_cross',
   symbol: 'BTCUSDT',
   timeframe: '1h',
   lookback: 500,
   params: {},
 })
 
+// Combine-strategies (ensemble) builder state
+const combo = ref({ threshold: 0.5, components: [] })
+const comboName = ref('')
+const savingCombo = ref(false)
+const comboMsg = ref('')
+const comboErr = ref(false)
+
 const currentStrategy = computed(() =>
-  strategies.value.find((s) => s.module === form.value.module) || null
+  strategies.value.find((s) => s.slug === form.value.slug) || null
 )
 const currentSpec = computed(() => currentStrategy.value?.param_spec || [])
+const isEnsemble = computed(() => currentStrategy.value?.module === 'strategies.ensemble')
+// strategies that can be used as components (exclude ensembles to avoid nesting)
+const combinable = computed(() => strategies.value.filter((s) => s.module !== 'strategies.ensemble'))
 
 // Seed the params object from the selected strategy's defaults
 const resetParams = () => {
@@ -159,7 +207,71 @@ const resetParams = () => {
   form.value.params = next
 }
 
-watch(() => form.value.module, resetParams)
+// Seed the combo builder from the selected ensemble's stored params
+const seedCombo = () => {
+  const p = currentStrategy.value?.params || {}
+  combo.value = {
+    threshold: typeof p.threshold === 'number' ? p.threshold : 0.5,
+    components: (p.components || []).map((c) => ({ module: c.module, weight: Number(c.weight) || 1 })),
+  }
+  comboMsg.value = ''
+  comboName.value = currentStrategy.value?.id != null ? (currentStrategy.value.name || '') : ''
+}
+
+const onStrategyChange = () => {
+  if (isEnsemble.value) seedCombo()
+  else resetParams()
+}
+
+watch(() => form.value.slug, onStrategyChange)
+
+const addComponent = () => {
+  const first = combinable.value[0]
+  combo.value.components.push({ module: first ? first.module : '', weight: 1 })
+}
+const removeComponent = (idx) => combo.value.components.splice(idx, 1)
+
+const buildRunParams = () => {
+  if (isEnsemble.value) {
+    return {
+      threshold: combo.value.threshold,
+      components: combo.value.components
+        .filter((c) => c.module)
+        .map((c) => ({ module: c.module, params: {}, weight: Number(c.weight) || 1 })),
+    }
+  }
+  return form.value.params
+}
+
+const saveCombo = async () => {
+  comboMsg.value = ''
+  const name = comboName.value.trim()
+  if (!name) { comboErr.value = true; comboMsg.value = 'name required'; return }
+  const comps = combo.value.components
+    .filter((c) => c.module)
+    .map((c) => ({ module: c.module, params: {}, weight: Number(c.weight) || 1 }))
+  if (!comps.length) { comboErr.value = true; comboMsg.value = 'add at least one strategy'; return }
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  savingCombo.value = true
+  try {
+    const r = await fetch('/trading/api/v1/backtest/combos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, name, threshold: combo.value.threshold, components: comps }),
+    })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+    await fetchStrategies()
+    form.value.slug = d.slug   // select the saved combo (triggers seedCombo)
+    comboErr.value = false
+    comboMsg.value = 'saved ✓'
+  } catch (e) {
+    comboErr.value = true
+    comboMsg.value = e.message
+  } finally {
+    savingCombo.value = false
+  }
+}
 
 const pct = (x) => (x == null ? '--' : (x >= 0 ? '+' : '') + (x * 100).toFixed(2) + '%')
 
@@ -197,16 +309,17 @@ const fetchStrategies = async () => {
       strategies.value = await r.json()
       // default to sma_cross if present, else first strategy
       if (!currentStrategy.value && strategies.value.length) {
-        form.value.module = (strategies.value.find((s) => s.module === 'strategies.sma_cross')
-          || strategies.value[0]).module
+        form.value.slug = (strategies.value.find((s) => s.slug === 'sma_cross')
+          || strategies.value[0]).slug
       }
-      resetParams()
+      onStrategyChange()
     }
   } catch (e) { /* ignore */ }
 }
 
 const run = async () => {
   error.value = ''
+  if (!currentStrategy.value) { error.value = 'no strategy selected'; return }
   running.value = true
   result.value = null
   try {
@@ -214,11 +327,11 @@ const run = async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        module: form.value.module,
+        module: currentStrategy.value.module,
         symbol: form.value.symbol,
         timeframe: form.value.timeframe,
         lookback: form.value.lookback,
-        params: form.value.params,
+        params: buildRunParams(),
       }),
     })
     const body = await runRes.json()

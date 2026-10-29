@@ -3,6 +3,7 @@
 v1 runs synchronously. If the requested OHLCV window isn't cached, it is
 backfilled from Binance on demand.
 """
+import re
 import time
 from typing import Optional
 
@@ -28,6 +29,17 @@ class StrategyCreate(BaseModel):
     source: str
     params: dict = {}
     description: Optional[str] = None
+
+
+class ComboCreate(BaseModel):
+    slug: str
+    name: str
+    threshold: float = 0.5
+    components: list[dict] = []          # [{module, params, weight}]
+    description: Optional[str] = None
+
+
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,48}$")
 
 
 class RunRequest(BaseModel):
@@ -106,6 +118,43 @@ def author_strategy(body: StrategyCreate, key: ApiKey = Depends(get_api_key),
                               params=body.params, description=body.description)
     except StrategyValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    return {"id": row.id, "slug": row.slug, "module": row.module, "name": row.name}
+
+
+@router.post("/combos")
+def save_combo(body: ComboCreate, db: Session = Depends(get_db)):
+    """Persist a weighted ensemble as a reusable strategy (StrategyDef).
+
+    No API key required — this is the single-user dashboard's Save button.
+    Re-saving the same slug updates it.
+    """
+    slug = body.slug.strip().lower()
+    if not _SLUG_RE.match(slug):
+        raise HTTPException(status_code=400, detail="invalid slug (use letters, digits, - or _)")
+    if not body.components:
+        raise HTTPException(status_code=400, detail="a combo needs at least one component")
+    for c in body.components:
+        module = c.get("module")
+        if not module or not module.startswith("strategies."):
+            raise HTTPException(status_code=400, detail=f"invalid component module: {module}")
+        try:
+            load_strategy(module, c.get("params") or {})
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"component {module} failed to load: {exc}")
+
+    params = {"threshold": body.threshold, "components": body.components}
+    row = db.query(StrategyDef).filter(StrategyDef.slug == slug).first()
+    if row:
+        row.name = body.name
+        row.module = "strategies.ensemble"
+        row.params = params
+        row.description = body.description
+    else:
+        row = StrategyDef(slug=slug, name=body.name, module="strategies.ensemble",
+                          params=params, description=body.description)
+        db.add(row)
+    db.commit()
+    db.refresh(row)
     return {"id": row.id, "slug": row.slug, "module": row.module, "name": row.name}
 
 
