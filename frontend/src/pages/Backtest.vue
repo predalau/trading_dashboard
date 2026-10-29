@@ -35,7 +35,7 @@
         <div v-if="currentSpec.length" class="flex flex-col gap-2 border-t border-term-line pt-3">
           <span class="text-muted text-xs">--params</span>
           <div v-for="p in currentSpec" :key="p.name" class="flex items-center gap-3">
-            <span class="text-xs w-36 shrink-0">{{ p.label || p.name }}</span>
+            <span class="text-xs w-28 shrink-0">{{ p.label || p.name }}</span>
 
             <button
               v-if="p.type === 'bool'"
@@ -54,19 +54,17 @@
             </select>
 
             <template v-else-if="p.type === 'int' || p.type === 'float'">
-              <span class="text-muted text-[10px] w-10 text-right shrink-0">{{ p.min }}</span>
               <input
                 type="range"
                 :min="p.min" :max="p.max" :step="p.step || 1"
                 v-model.number="form.params[p.name]"
-                class="flex-1 accent-term-accent"
+                class="param-slider flex-1 min-w-[140px]"
               />
-              <span class="text-muted text-[10px] w-10 shrink-0">{{ p.max }}</span>
               <input
                 type="number"
                 :min="p.min" :max="p.max" :step="p.step || 1"
                 v-model.number="form.params[p.name]"
-                class="t-input w-24"
+                class="t-input w-16 text-center shrink-0"
               />
             </template>
 
@@ -225,3 +223,42 @@ const run = async () => {
 
 onMounted(fetchStrategies)
 </script>
+
+<style scoped>
+/* Visible, grabbable range slider */
+.param-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line, #30363d);
+  cursor: pointer;
+  outline: none;
+}
+.param-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent, #4fd6ff);
+  border: 2px solid var(--surface, #0a0f15);
+  cursor: grab;
+}
+.param-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+.param-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent, #4fd6ff);
+  border: 2px solid var(--surface, #0a0f15);
+  cursor: grab;
+}
+.param-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line, #30363d);
+}
+</style>
