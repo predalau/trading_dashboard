@@ -17,7 +17,7 @@ from app.backtest.param_spec import describe_params
 from app.backtest.trend_bias import build_bias_series, higher_timeframes
 from app.database import get_db
 from app.deps.auth import get_api_key, require_scope
-from app.models import ApiKey, Backtest, StrategyDef
+from app.models import ApiKey, Backtest, StrategyDef, Sweep
 from app.services.ohlcv_service import INTERVAL_MS, backfill, get_ohlcv
 from app.services.strategy_authoring import StrategyValidationError, create_strategy
 
@@ -232,6 +232,53 @@ async def run_backtest(body: RunRequest, db: Session = Depends(get_db)):
     return {"id": bt.id, "status": bt.status, "symbol": bt.symbol,
             "timeframe": bt.timeframe, "bars": len(bars), "metrics": bt.metrics,
             "trend_bias": {"enabled": body.bias_enabled, "higher_timeframes": htfs}}
+
+
+class SweepRequest(BaseModel):
+    lookback: int = 1000
+    grid_steps: int = 7
+    max_combos: int = 4000
+    symbols: Optional[list[str]] = None
+    timeframes: Optional[list[str]] = None
+    bias_thresholds: list[float] = [0.0, 0.5]
+
+
+@router.post("/sweep")
+async def start_sweep(body: SweepRequest, db: Session = Depends(get_db)):
+    """Launch a background parameter sweep; poll GET /sweep/{id} for progress."""
+    import asyncio
+    from app.backtest.optimizer import run_sweep, SYMBOLS, TIMEFRAMES
+
+    sweep = Sweep(status="running", total=0, done=0, score_metric="total_return",
+                  lookback=body.lookback)
+    db.add(sweep)
+    db.commit()
+    db.refresh(sweep)
+
+    asyncio.create_task(run_sweep(
+        sweep.id,
+        body.symbols or SYMBOLS,
+        body.timeframes or TIMEFRAMES,
+        body.grid_steps, body.lookback, body.max_combos, body.bias_thresholds,
+    ))
+    return {"id": sweep.id, "status": sweep.status}
+
+
+@router.get("/sweeps")
+def list_sweeps(limit: int = 5, db: Session = Depends(get_db)):
+    rows = db.query(Sweep).order_by(Sweep.id.desc()).limit(min(limit, 20)).all()
+    return [{"id": s.id, "status": s.status, "total": s.total, "done": s.done,
+             "created_at": s.created_at.isoformat() if s.created_at else None} for s in rows]
+
+
+@router.get("/sweep/{sweep_id}")
+def get_sweep(sweep_id: int, db: Session = Depends(get_db)):
+    s = db.query(Sweep).filter(Sweep.id == sweep_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="sweep not found")
+    return {"id": s.id, "status": s.status, "total": s.total, "done": s.done,
+            "score_metric": s.score_metric, "lookback": s.lookback,
+            "results": s.results or [], "error": s.error}
 
 
 @router.get("/{backtest_id}")

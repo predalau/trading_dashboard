@@ -27,7 +27,7 @@
           </label>
           <label class="flex flex-col gap-1">
             <span class="text-muted text-xs">--lookback (bars)</span>
-            <input v-model.number="form.lookback" type="number" min="50" max="1000" class="t-input w-32" />
+            <input v-model.number="form.lookback" type="number" min="50" max="10000" class="t-input w-32" />
           </label>
         </div>
 
@@ -165,11 +165,78 @@
         </div>
       </div>
     </TermPanel>
+
+    <!-- Optimizer: sweep all settings -->
+    <TermPanel title="sweep.sh — optimizer" tone="surface">
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-wrap gap-3 items-end">
+          <label class="flex flex-col gap-1">
+            <span class="text-muted text-xs">grid steps / param</span>
+            <input v-model.number="sweepOpts.grid_steps" type="number" min="2" max="12" class="t-input w-24" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-muted text-xs">max combos</span>
+            <input v-model.number="sweepOpts.max_combos" type="number" min="50" max="100000" class="t-input w-28" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-muted text-xs">lookback (bars)</span>
+            <input v-model.number="sweepOpts.lookback" type="number" min="50" max="10000" class="t-input w-28" />
+          </label>
+          <button type="button" class="t-btn justify-start py-3" :disabled="sweepRunning" @click="startSweep">
+            {{ sweepRunning ? '$ sweeping…' : '$ ./sweep --all ⏎' }}
+          </button>
+        </div>
+        <p class="text-muted text-xs">
+          Full cross-product: all strategies × all 5 symbols × all 4 timeframes × param grid × bias (off / on@0.0 / on@0.5),
+          capped at max-combos. Big lookback × many combos is slow.
+        </p>
+        <div v-if="sweep" class="flex flex-col gap-1">
+          <div class="flex justify-between text-xs text-muted">
+            <span>{{ sweep.status }}</span>
+            <span>{{ sweep.done }} / {{ sweep.total }}</span>
+          </div>
+          <div class="h-2 bg-term-surface border border-term-line">
+            <div class="h-full bg-term-accent" :style="{ width: sweepPct + '%' }"></div>
+          </div>
+          <span v-if="sweep.error" class="text-down text-xs">{{ sweep.error }}</span>
+        </div>
+      </div>
+    </TermPanel>
+
+    <!-- Report: top results (click a row to run & display it) -->
+    <TermPanel v-if="sweep && sweep.results && sweep.results.length" title="report — top results">
+      <template #meta><span>{{ sweep.results.length }} shown · ranked by total return</span></template>
+      <div class="overflow-x-auto">
+        <table class="t-table">
+          <thead>
+            <tr>
+              <th>#</th><th>strategy</th><th>symbol</th><th>tf</th>
+              <th>params</th><th>bias</th><th>return</th><th>trades</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(r, i) in sweep.results" :key="i"
+                class="cursor-pointer hover:bg-term-surface"
+                @click="applyResult(r.config)">
+              <td class="text-muted">{{ i + 1 }}</td>
+              <td>{{ r.config.slug }}</td>
+              <td>{{ r.config.symbol }}</td>
+              <td>{{ r.config.timeframe }}</td>
+              <td class="text-muted text-xs">{{ paramsStr(r.config.params) }}</td>
+              <td class="text-xs">{{ r.config.bias.enabled ? ('≥' + r.config.bias.entry_threshold) : '—' }}</td>
+              <td :class="r.score >= 0 ? 'text-up' : 'text-down'">{{ pct(r.score) }}</td>
+              <td>{{ r.metrics.num_trades }}</td>
+              <td class="text-accent text-xs">run ▸</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </TermPanel>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import TermPanel from '../components/term/TermPanel.vue'
 import BacktestChart from '../components/BacktestChart.vue'
 import ParamControls from '../components/ParamControls.vue'
@@ -393,6 +460,76 @@ const run = async () => {
 }
 
 onMounted(fetchStrategies)
+onUnmounted(() => { if (sweepPoll) clearInterval(sweepPoll) })
+
+// ---- Optimizer sweep + report ----
+const sweepOpts = ref({ grid_steps: 7, max_combos: 4000, lookback: 1000 })
+const sweep = ref(null)
+const sweepRunning = ref(false)
+let sweepPoll = null
+
+const sweepPct = computed(() => {
+  if (!sweep.value || !sweep.value.total) return 0
+  return Math.round((sweep.value.done / sweep.value.total) * 100)
+})
+
+const paramsStr = (p) => Object.entries(p || {}).map(([k, v]) => `${k}=${v}`).join(' ')
+
+const startSweep = async () => {
+  error.value = ''
+  sweepRunning.value = true
+  sweep.value = null
+  try {
+    const r = await fetch('/trading/api/v1/backtest/sweep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lookback: sweepOpts.value.lookback,
+        grid_steps: sweepOpts.value.grid_steps,
+        max_combos: sweepOpts.value.max_combos,
+      }),
+    })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+    pollSweep(d.id)
+  } catch (e) {
+    error.value = e.message
+    sweepRunning.value = false
+  }
+}
+
+const pollSweep = (id) => {
+  if (sweepPoll) clearInterval(sweepPoll)
+  sweepPoll = setInterval(async () => {
+    try {
+      const d = await (await fetch(`/trading/api/v1/backtest/sweep/${id}`)).json()
+      sweep.value = d
+      if (d.status !== 'running') {
+        clearInterval(sweepPoll); sweepPoll = null; sweepRunning.value = false
+      }
+    } catch (e) { /* keep polling */ }
+  }, 2000)
+}
+
+// Click a report row -> load that config into the form and run it
+const applyResult = async (cfg) => {
+  form.value.slug = cfg.slug
+  form.value.symbol = cfg.symbol
+  form.value.timeframe = cfg.timeframe
+  form.value.lookback = cfg.lookback
+  bias.value = {
+    enabled: !!cfg.bias.enabled,
+    sma_len: cfg.bias.sma_len || 50,
+    entry_threshold: cfg.bias.entry_threshold ?? 0,
+    exit_enabled: false,
+    exit_threshold: -0.5,
+  }
+  await nextTick()                 // let the slug watcher reset params to defaults
+  form.value.params = { ...cfg.params }
+  await nextTick()
+  run()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 </script>
 
 <style scoped>

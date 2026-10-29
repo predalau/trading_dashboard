@@ -157,6 +157,18 @@ CREATE TABLE IF NOT EXISTS backtests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS sweeps (
+    id SERIAL PRIMARY KEY,
+    status VARCHAR(20) DEFAULT 'running',
+    total INTEGER DEFAULT 0,
+    done INTEGER DEFAULT 0,
+    score_metric VARCHAR(30) DEFAULT 'total_return',
+    lookback INTEGER DEFAULT 1000,
+    results JSONB,
+    error VARCHAR(1000),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Opt-in encrypted bot hot wallet (DISABLED by default; deny-all allowlist)
 CREATE TABLE IF NOT EXISTS bot_hot_wallet (
     id SERIAL PRIMARY KEY,

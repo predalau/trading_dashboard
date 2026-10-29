@@ -187,6 +187,21 @@ class Backtest(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class Sweep(Base):
+    """A parameter-sweep (grid-search) job over backtest settings."""
+    __tablename__ = "sweeps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    status = Column(String(20), default="running")  # running | done | error
+    total = Column(Integer, default=0)
+    done = Column(Integer, default=0)
+    score_metric = Column(String(30), default="total_return")
+    lookback = Column(Integer, default=1000)
+    results = Column(JSON, nullable=True)   # top-N [{config, metrics, score}]
+    error = Column(String(1000), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class BotHotWallet(Base):
     """Opt-in encrypted hot wallet for unattended bots. DISABLED by default.
 
