@@ -281,6 +281,18 @@ def get_sweep(sweep_id: int, db: Session = Depends(get_db)):
             "results": s.results or [], "error": s.error}
 
 
+@router.post("/sweep/{sweep_id}/cancel")
+def cancel_sweep(sweep_id: int, db: Session = Depends(get_db)):
+    """Signal a running sweep to stop (it checks this flag every ~25 combos)."""
+    s = db.query(Sweep).filter(Sweep.id == sweep_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="sweep not found")
+    if s.status == "running":
+        s.status = "cancelled"
+        db.commit()
+    return {"id": s.id, "status": s.status}
+
+
 @router.get("/{backtest_id}")
 def get_backtest(backtest_id: int, db: Session = Depends(get_db)):
     bt = db.query(Backtest).filter(Backtest.id == backtest_id).first()

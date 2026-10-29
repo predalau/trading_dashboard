@@ -5,7 +5,9 @@ trend-bias variants, runs each through the engine (no DB rows created), and
 keeps the top-N by a score metric. Runs as a background task; progress and
 results are written to the Sweep row.
 """
+import hashlib
 import itertools
+import json
 import random
 import time
 
@@ -13,11 +15,25 @@ from app.backtest.engine import run as run_engine
 from app.backtest.param_spec import describe_params
 from app.backtest.registry import load_strategy
 from app.backtest.trend_bias import build_bias_series
-from app.models import Sweep
+from app.models import Sweep, SweepResult
 from app.services.ohlcv_service import INTERVAL_MS, backfill, get_ohlcv
 
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 TIMEFRAMES = ["15m", "1h", "4h", "1d"]
+
+
+def config_hash(cfg: dict) -> str:
+    """Stable hash of everything that affects a backtest's result."""
+    canon = {
+        "module": cfg["module"],
+        "params": cfg.get("params") or {},
+        "symbol": cfg["symbol"],
+        "timeframe": cfg["timeframe"],
+        "lookback": cfg["lookback"],
+        "bias": cfg.get("bias") or {"enabled": False},
+    }
+    s = json.dumps(canon, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(s.encode()).hexdigest()
 
 
 def _now_ms() -> int:
@@ -86,6 +102,7 @@ def enumerate_configs(symbols, timeframes, steps, lookback, bias_thresholds) -> 
 
 async def run_sweep(sweep_id: int, symbols, timeframes, steps, lookback,
                     max_combos, bias_thresholds, score_metric="total_return"):
+    import asyncio
     from app.database import SessionLocal
     db = SessionLocal()
     sweep = db.query(Sweep).filter(Sweep.id == sweep_id).first()
@@ -104,48 +121,85 @@ async def run_sweep(sweep_id: int, symbols, timeframes, steps, lookback,
         bars_cache: dict = {}
         bias_cache: dict = {}
         results = []
+        cancelled = False
+        computed = 0
+        reused = 0
 
         for idx, cfg in enumerate(configs):
             sym, tf = cfg["symbol"], cfg["timeframe"]
-            try:
-                bars = bars_cache.get((sym, tf))
-                if bars is None:
-                    interval = INTERVAL_MS[tf]
-                    start = now - lookback * interval
-                    bars = get_ohlcv(db, sym, tf, start, now)
-                    if len(bars) < min(lookback, 100):
-                        await backfill(db, sym, tf, start, now)
+            h = config_hash(cfg)
+
+            # Cache hit -> reuse, skip the backtest entirely
+            cached = db.query(SweepResult).filter(SweepResult.config_hash == h).first()
+            if cached:
+                results.append({"config": cfg, "metrics": cached.metrics,
+                                "score": cached.score if cached.score is not None else 0.0})
+                reused += 1
+            else:
+                try:
+                    bars = bars_cache.get((sym, tf))
+                    if bars is None:
+                        interval = INTERVAL_MS[tf]
+                        start = now - lookback * interval
                         bars = get_ohlcv(db, sym, tf, start, now)
-                    bars_cache[(sym, tf)] = bars
-                if len(bars) < 2:
-                    continue
+                        if len(bars) < min(lookback, 100):
+                            await backfill(db, sym, tf, start, now)
+                            bars = get_ohlcv(db, sym, tf, start, now)
+                        bars_cache[(sym, tf)] = bars
+                    if len(bars) >= 2:
+                        bias_arr, entry_thr = None, -1.0
+                        if cfg["bias"]["enabled"]:
+                            sma_len = cfg["bias"].get("sma_len", 50)
+                            ckey = (sym, tf, sma_len)
+                            if ckey not in bias_cache:
+                                bias_cache[ckey], _ = await build_bias_series(db, sym, tf, bars, sma_len=sma_len)
+                            bias_arr = bias_cache[ckey]
+                            entry_thr = cfg["bias"].get("entry_threshold", 0.0)
 
-                bias_arr, entry_thr = None, -1.0
-                if cfg["bias"]["enabled"]:
-                    sma_len = cfg["bias"].get("sma_len", 50)
-                    ckey = (sym, tf, sma_len)
-                    if ckey not in bias_cache:
-                        bias_cache[ckey], _ = await build_bias_series(db, sym, tf, bars, sma_len=sma_len)
-                    bias_arr = bias_cache[ckey]
-                    entry_thr = cfg["bias"].get("entry_threshold", 0.0)
-
-                strat = load_strategy(cfg["module"], cfg["params"])
-                res = run_engine(bars, strat, bias=bias_arr, entry_threshold=entry_thr)
-                score = res["metrics"].get(score_metric)
-                results.append({"config": cfg, "metrics": res["metrics"],
-                                "score": score if score is not None else 0.0})
-            except Exception:
-                pass
+                        strat = load_strategy(cfg["module"], cfg["params"])
+                        # run the CPU-bound backtest off the event loop so the API
+                        # (cancel, dashboard, pending poller) stays responsive
+                        res = await asyncio.to_thread(
+                            run_engine, bars, strat, bias=bias_arr, entry_threshold=entry_thr)
+                        metrics = res["metrics"]
+                        score = metrics.get(score_metric)
+                        score = score if score is not None else 0.0
+                        db.add(SweepResult(
+                            config_hash=h, module=cfg["module"], slug=cfg["slug"],
+                            symbol=sym, timeframe=tf, lookback=lookback,
+                            params=cfg["params"], bias=cfg["bias"],
+                            metrics=metrics, score=score))
+                        results.append({"config": cfg, "metrics": metrics, "score": score})
+                        computed += 1
+                except Exception:
+                    pass
 
             if idx % 25 == 0:
                 sweep.done = idx
-                db.commit()
+                try:
+                    db.commit()           # persist progress + any cached rows
+                except Exception:
+                    db.rollback()
+                db.refresh(sweep)         # pick up an external cancel
+                if sweep.status == "cancelled":
+                    cancelled = True
+                    break
+            await asyncio.sleep(0)        # yield so the API stays responsive
 
         results.sort(key=lambda r: r["score"], reverse=True)
         sweep.results = results[:100]
-        sweep.done = sweep.total
-        sweep.status = "done"
-        db.commit()
+        if cancelled:
+            sweep.status = "cancelled"
+        else:
+            sweep.status = "done"
+            sweep.done = sweep.total
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            sweep.results = results[:100]
+            sweep.status = "cancelled" if cancelled else "done"
+            db.commit()
     except Exception as exc:
         sweep.status = "error"
         sweep.error = str(exc)[:1000]

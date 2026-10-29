@@ -185,10 +185,11 @@
           <button type="button" class="t-btn justify-start py-3" :disabled="sweepRunning" @click="startSweep">
             {{ sweepRunning ? '$ sweeping…' : '$ ./sweep --all ⏎' }}
           </button>
+          <button v-if="sweepRunning" type="button" class="t-btn-danger py-3 px-4" @click="stopSweep">stop</button>
         </div>
         <p class="text-muted text-xs">
           Full cross-product: all strategies × all 5 symbols × all 4 timeframes × param grid × bias (off / on@0.0 / on@0.5),
-          capped at max-combos. Big lookback × many combos is slow.
+          capped at max-combos. Results are cached, so repeated combos are skipped instantly (and a stopped sweep resumes on re-run).
         </p>
         <div v-if="sweep" class="flex flex-col gap-1">
           <div class="flex justify-between text-xs text-muted">
@@ -500,15 +501,23 @@ const startSweep = async () => {
 
 const pollSweep = (id) => {
   if (sweepPoll) clearInterval(sweepPoll)
+  sweep.value = sweep.value || { id }
+  sweep.value.id = id
   sweepPoll = setInterval(async () => {
     try {
       const d = await (await fetch(`/trading/api/v1/backtest/sweep/${id}`)).json()
+      d.id = id
       sweep.value = d
       if (d.status !== 'running') {
         clearInterval(sweepPoll); sweepPoll = null; sweepRunning.value = false
       }
     } catch (e) { /* keep polling */ }
   }, 2000)
+}
+
+const stopSweep = async () => {
+  if (!sweep.value?.id) return
+  try { await fetch(`/trading/api/v1/backtest/sweep/${sweep.value.id}/cancel`, { method: 'POST' }) } catch (e) { /* ignore */ }
 }
 
 // Click a report row -> load that config into the form and run it

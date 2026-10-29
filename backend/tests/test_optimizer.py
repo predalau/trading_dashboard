@@ -1,6 +1,17 @@
 from app.backtest.optimizer import (
-    _param_values, _strategy_param_grid, enumerate_configs,
+    _param_values, _strategy_param_grid, enumerate_configs, config_hash,
 )
+
+
+def test_config_hash_is_stable_and_discriminating():
+    a = {"module": "strategies.rsi", "params": {"period": 14, "oversold": 30},
+         "symbol": "BTCUSDT", "timeframe": "1h", "lookback": 500, "bias": {"enabled": False}}
+    # key order within params must not matter
+    b = {"module": "strategies.rsi", "params": {"oversold": 30, "period": 14},
+         "symbol": "BTCUSDT", "timeframe": "1h", "lookback": 500, "bias": {"enabled": False}}
+    assert config_hash(a) == config_hash(b)
+    c = dict(a, lookback=1000)
+    assert config_hash(a) != config_hash(c)   # lookback changes the result -> different key
 
 
 def test_param_values_samples_range_inclusive():

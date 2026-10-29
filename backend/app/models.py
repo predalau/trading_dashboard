@@ -202,6 +202,24 @@ class Sweep(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class SweepResult(Base):
+    """Cached backtest result for one config (dedup + resume across sweeps)."""
+    __tablename__ = "sweep_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    config_hash = Column(String(64), unique=True, index=True, nullable=False)
+    module = Column(String(150))
+    slug = Column(String(80))
+    symbol = Column(String(50))
+    timeframe = Column(String(10))
+    lookback = Column(Integer)
+    params = Column(JSON)
+    bias = Column(JSON)
+    metrics = Column(JSON)
+    score = Column(Float)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class BotHotWallet(Base):
     """Opt-in encrypted hot wallet for unattended bots. DISABLED by default.
 

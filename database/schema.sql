@@ -169,6 +169,22 @@ CREATE TABLE IF NOT EXISTS sweeps (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS sweep_results (
+    id SERIAL PRIMARY KEY,
+    config_hash VARCHAR(64) UNIQUE NOT NULL,
+    module VARCHAR(150),
+    slug VARCHAR(80),
+    symbol VARCHAR(50),
+    timeframe VARCHAR(10),
+    lookback INTEGER,
+    params JSONB,
+    bias JSONB,
+    metrics JSONB,
+    score DOUBLE PRECISION,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS ix_sweep_results_score ON sweep_results(score DESC);
+
 -- Opt-in encrypted bot hot wallet (DISABLED by default; deny-all allowlist)
 CREATE TABLE IF NOT EXISTS bot_hot_wallet (
     id SERIAL PRIMARY KEY,
