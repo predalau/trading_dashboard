@@ -56,16 +56,16 @@
 
             <template v-else-if="p.type === 'int' || p.type === 'float'">
               <input
-                type="range"
-                :min="p.min" :max="p.max" :step="p.step || 1"
-                v-model.number="form.params[p.name]"
-                class="param-slider flex-1 min-w-[220px]"
-              />
-              <input
                 type="number"
                 :min="p.min" :max="p.max" :step="p.step || 1"
                 v-model.number="form.params[p.name]"
-                class="t-input w-14 text-center shrink-0 px-1"
+                class="t-input w-16 text-center shrink-0 px-1"
+              />
+              <input
+                type="range"
+                :min="p.min" :max="p.max" :step="p.step || 1"
+                v-model.number="form.params[p.name]"
+                class="param-slider flex-1 min-w-0"
               />
             </template>
 
