@@ -204,10 +204,36 @@
       </div>
     </TermPanel>
 
-    <!-- Report: top results (click a row to run & display it) -->
-    <TermPanel v-if="sweep && sweep.results && sweep.results.length" title="report — top results">
-      <template #meta><span>{{ sweep.results.length }} shown · ranked by total return</span></template>
-      <div class="overflow-x-auto">
+    <!-- Report: filterable top results over the whole sweep cache -->
+    <TermPanel title="report — top results">
+      <template #meta><span>{{ reportRows.length }} shown · ranked by total return</span></template>
+
+      <div class="flex flex-wrap gap-2 mb-3">
+        <select v-model="reportFilters.symbol" class="t-input" style="width: auto">
+          <option value="">all symbols</option>
+          <option v-for="s in symbols" :key="s" :value="s">{{ s }}</option>
+        </select>
+        <select v-model="reportFilters.timeframe" class="t-input" style="width: auto">
+          <option value="">all timeframes</option>
+          <option v-for="t in timeframes" :key="t" :value="t">{{ t }}</option>
+        </select>
+        <select v-model="reportFilters.slug" class="t-input" style="width: auto">
+          <option value="">all strategies</option>
+          <option v-for="s in strategyOptions" :key="s.slug" :value="s.slug">{{ s.name }}</option>
+        </select>
+        <select v-model="reportFilters.bias" class="t-input" style="width: auto">
+          <option value="">bias: any</option>
+          <option value="on">bias: on</option>
+          <option value="off">bias: off</option>
+        </select>
+        <button v-if="reportFilters.symbol || reportFilters.timeframe || reportFilters.slug || reportFilters.bias"
+                type="button" class="t-btn-ghost text-xs px-2" @click="clearReportFilters">clear</button>
+      </div>
+
+      <div v-if="!reportRows.length" class="text-muted text-xs py-3">
+        no cached results for this filter — run a sweep above.
+      </div>
+      <div v-else class="overflow-x-auto">
         <table class="t-table">
           <thead>
             <tr>
@@ -216,7 +242,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(r, i) in sweep.results" :key="i"
+            <tr v-for="(r, i) in reportRows" :key="i"
                 class="cursor-pointer hover:bg-term-surface"
                 @click="applyResult(r.config)">
               <td class="text-muted">{{ i + 1 }}</td>
@@ -460,8 +486,29 @@ const run = async () => {
   }
 }
 
-onMounted(fetchStrategies)
+onMounted(() => { fetchStrategies(); fetchResults() })
 onUnmounted(() => { if (sweepPoll) clearInterval(sweepPoll) })
+
+// ---- Report: filterable results over the sweep cache ----
+const reportFilters = ref({ symbol: '', timeframe: '', slug: '', bias: '' })
+const reportRows = ref([])
+const strategyOptions = computed(() => combinable.value.map((s) => ({ slug: s.slug, name: s.name || s.slug })))
+
+const fetchResults = async () => {
+  const p = new URLSearchParams()
+  const f = reportFilters.value
+  if (f.symbol) p.set('symbol', f.symbol)
+  if (f.timeframe) p.set('timeframe', f.timeframe)
+  if (f.slug) p.set('slug', f.slug)
+  if (f.bias) p.set('bias', f.bias)
+  p.set('limit', '100')
+  try {
+    const r = await fetch('/trading/api/v1/backtest/results?' + p.toString())
+    if (r.ok) reportRows.value = await r.json()
+  } catch (e) { /* ignore */ }
+}
+const clearReportFilters = () => { reportFilters.value = { symbol: '', timeframe: '', slug: '', bias: '' } }
+watch(reportFilters, fetchResults, { deep: true })
 
 // ---- Optimizer sweep + report ----
 const sweepOpts = ref({ grid_steps: 7, max_combos: 4000, lookback: 1000 })
@@ -510,6 +557,7 @@ const pollSweep = (id) => {
       sweep.value = d
       if (d.status !== 'running') {
         clearInterval(sweepPoll); sweepPoll = null; sweepRunning.value = false
+        fetchResults()   // refresh the report with the newly-cached results
       }
     } catch (e) { /* keep polling */ }
   }, 2000)

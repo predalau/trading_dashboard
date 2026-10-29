@@ -9,6 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.backtest.engine import run as run_engine
@@ -17,7 +18,7 @@ from app.backtest.param_spec import describe_params
 from app.backtest.trend_bias import build_bias_series, higher_timeframes
 from app.database import get_db
 from app.deps.auth import get_api_key, require_scope
-from app.models import ApiKey, Backtest, StrategyDef, Sweep
+from app.models import ApiKey, Backtest, StrategyDef, Sweep, SweepResult
 from app.services.ohlcv_service import INTERVAL_MS, backfill, get_ohlcv
 from app.services.strategy_authoring import StrategyValidationError, create_strategy
 
@@ -291,6 +292,31 @@ def cancel_sweep(sweep_id: int, db: Session = Depends(get_db)):
         s.status = "cancelled"
         db.commit()
     return {"id": s.id, "status": s.status}
+
+
+@router.get("/results")
+def query_results(symbol: Optional[str] = None, timeframe: Optional[str] = None,
+                  slug: Optional[str] = None, bias: Optional[str] = None,
+                  limit: int = 100, db: Session = Depends(get_db)):
+    """Filterable top results over the whole sweep cache (ranked by score)."""
+    q = db.query(SweepResult)
+    if symbol:
+        q = q.filter(SweepResult.symbol == symbol)
+    if timeframe:
+        q = q.filter(SweepResult.timeframe == timeframe)
+    if slug:
+        q = q.filter(SweepResult.slug == slug)
+    if bias == "on":
+        q = q.filter(func.jsonb_extract_path_text(SweepResult.bias, "enabled") == "true")
+    elif bias == "off":
+        q = q.filter(func.jsonb_extract_path_text(SweepResult.bias, "enabled") == "false")
+    rows = q.order_by(SweepResult.score.desc().nullslast()).limit(min(limit, 500)).all()
+    return [{
+        "config": {"slug": r.slug, "module": r.module, "params": r.params,
+                   "symbol": r.symbol, "timeframe": r.timeframe,
+                   "lookback": r.lookback, "bias": r.bias or {"enabled": False}},
+        "metrics": r.metrics, "score": r.score,
+    } for r in rows]
 
 
 @router.get("/{backtest_id}")
